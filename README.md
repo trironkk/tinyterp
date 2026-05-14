@@ -1,33 +1,33 @@
 # tinyterp
 
 This repository will hold my personal explorations of the mechanistic interpretability domain. I'll
-be re-implenenting concepts on a smaller scale to convince myself of my own understanding,
-minimizing the dependencies taken on the critical path of training and inference.
+be re-implementing concepts on a smaller scale to convince myself of my own understanding,
+minimizing the dependencies on the critical path of training and inference.
 
 ## Environment Setup
 
-<todo>
+> TODO
 
 ## Differentiation
 
-<todo>
+> TODO
 
 ## Transformer
 
-<todo>
+> TODO
 
 ## Sparse Autoencoders
 
-<todo>
+> TODO
 
 ## Circuits
 
-<todo>
+> TODO
 
 ## Evaluations
 
-<todo>
+> TODO
 
 ## References
 
-<todo>
+> TODO
