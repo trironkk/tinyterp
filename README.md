@@ -9,13 +9,19 @@ minimizing the dependencies on the critical path of training and inference.
 ### Setup
 
 ```shell
-git clone https://www.github.com/trironkk/tinyterp
+git clone --recurse-submodules https://www.github.com/trironkk/tinyterp
 cd tinyterp
 # Install uv at https://docs.astral.sh/uv/getting-started/installation/
 # torch is gated behind a per-machine extra — pick one (see Troubleshooting):
 uv sync --extra cu130   # desktop with a CUDA GPU
 # uv sync --extra cpu   # laptop / no usable GPU
 uv run nbstripout --install --attributes .gitattributes
+```
+
+If you've already cloned without submodules, initialize them:
+
+```shell
+git submodule update --init --recursive
 ```
 
 ### Recipes

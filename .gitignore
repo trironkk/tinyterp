@@ -8,7 +8,9 @@ __pycache__/
 .ruff_cache/
 
 *.swp
-.claude/
+.claude/*
+!.claude/skills
+!.claude/vendor
 .env
 .idea/
 .venv/
