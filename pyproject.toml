@@ -7,9 +7,16 @@ requires-python = ">=3.12"
 dependencies = [
     "einops>=0.8.2",
     "numpy>=2.4.4",
-    "torch>=2.12.0",
     "transformers>=5.8.1",
 ]
+
+[project.optional-dependencies]
+# Select one per machine at sync time (mutually exclusive, see [tool.uv] conflicts):
+#   uv sync --extra cu130   # desktop with a CUDA GPU
+#   uv sync --extra cpu     # laptop / no usable GPU
+cpu = ["torch>=2.12.0"]
+cu130 = ["torch>=2.12.0"]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
@@ -23,10 +30,21 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cu130" }]]
+
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true  # Prevents generic packages (like numpy) from pulling from here
 
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu130", extra = "cu130" },
+]
