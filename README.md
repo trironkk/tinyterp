@@ -4,6 +4,47 @@ This repository will hold my personal explorations of the mechanistic interpreta
 be re-implementing concepts on a smaller scale to convince myself of my own understanding,
 minimizing the dependencies on the critical path of training and inference.
 
+## Learning Workflow
+
+This repo is run as a teaching workspace: I write notebooks with Claude (see
+[CLAUDE.md](./CLAUDE.md) for its operating manual as teacher), then interrogate them. The
+guiding principle is **fast default, depth on demand** — move quickly because I have a
+foundation, but drop into stronger loops when I need more thorough understanding.
+
+**Per-session loop:**
+
+1. **Gather** — collect canonical sources, record them in `RESOURCES.md`, compile the
+   relevant `wiki/` pages *with citations*. Nothing is taught from memory.
+2. **Build** — Claude writes a short notebook (`notebooks/NN_topic.ipynb`) and sidecar
+   (`notebooks/NN_topic.md`) derived from the wiki. Reimplemented to the linear-algebra
+   layer; correctness pinned by inline asserts against a reference (e.g. matching HF
+   logits).
+3. **Interrogate** — fast Socratic Q&A by default; escalate on demand to
+   *reconstruct-on-demand* (rebuild a blanked function) or *predict-before-reveal* (call
+   the tensor shapes/values before running). These rungs, plus spacing and interleaving of
+   old material, build storage strength rather than the fluency illusion.
+4. **Distill** — sharp exchanges go into the sidecar; deferred depth goes into its
+   **Follow-ups** backlog (pulling one spawns a companion notebook `NNb_…`); demonstrated
+   understanding earns a `learning-records/` entry; recurring concepts graduate to `wiki/`.
+
+**Artifacts:** `MISSION.md` (the *why*, grounds everything) · `wiki/` (source-grounded input
+knowledge) · `RESOURCES.md` (curated sources) · `notebooks/NN_*.{ipynb,md}` (exploration +
+memory aid) · `learning-records/` (demonstrated understanding, ADR-style) · a glossary
+(compressed output, terms added only once understood). `tinyterp/` and `tests/` stay empty
+until duplication forces an extraction.
+
+**Curriculum spine:** Transformer → Circuits → Sparse Autoencoders → Evaluations. (Circuits
+precede SAEs so that disentangling features is *motivated* by a circuit that uses them.)
+
+**Bootstrapping plan:**
+
+1. **Examine the mission** — interview past "convince myself" to a concrete real-world
+   outcome; write `MISSION.md`. Gates everything downstream.
+2. **Initialize the knowledge base** — stand up `wiki/` + `RESOURCES.md`, seeded by a
+   source search.
+3. **Retroactively run the workflow on notebook 01** — dry-run the full loop end-to-end on
+   existing material before applying it to new topics.
+
 ## Development Notes
 
 ### Setup
@@ -56,11 +97,11 @@ $ uv run jupyter nbconvert --to markdown --execute --stdout notebooks/01_gpt2_in
 
 > TODO
 
-### Sparse Autoencoders
+### Circuits
 
 > TODO
 
-### Circuits
+### Sparse Autoencoders
 
 > TODO
 
