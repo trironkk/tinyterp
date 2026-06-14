@@ -11,6 +11,9 @@ __pycache__/
 .claude/*
 !.claude/skills
 !.claude/vendor
+.agy/*
+!.agy/skills
+!.agy/vendor
 .env
 .idea/
 .venv/
