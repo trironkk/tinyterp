@@ -1,3 +1,6 @@
 [submodule ".claude/skills"]
 	path = .claude/vendor/mattpocock-skills
 	url = https://github.com/mattpocock/skills
+[submodule ".claude/vendor/obra-superpowers"]
+	path = .claude/vendor/obra-superpowers
+	url = https://github.com/obra/superpowers
