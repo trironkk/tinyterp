@@ -30,9 +30,18 @@ difference between *coverage* and *learning*.
    moving. Escalate **on demand** when something is slippery:
    - *Reconstruct-on-demand*: blank a function, user rebuilds it.
    - *Predict-before-reveal*: user calls tensor shapes/values before you run the cell.
-4. **Distill.** Write sharp exchanges back into the sidecar. Park deferred depth in the
-   sidecar's **Follow-ups** (this is the depth-on-demand backlog — pulling one spawns a
-   companion notebook `NNb_…`). Promote a concept to a `wiki/` page once it recurs.
+4. **Document.** Fan the exchange out into artifacts with distinct jobs, not one blob:
+   - *Transcript* (sidecar) — the exchange, lightly curated so the reasoning survives, not
+     just the conclusions. Fidelity layer.
+   - *Retrieval cues* (sidecar) — questions **without** answers, for spaced re-quiz in later
+     sessions. Active recall, not a re-readable summary (that would feed the fluency illusion).
+   - *Follow-ups* (sidecar) — the depth-on-demand backlog; pulling one spawns a companion
+     notebook `NNb_…`.
+   - *Briefing* (README `## Project Logs`) — a few lines per topic, the rolling cross-topic
+     progress view; skimmable to re-orient when coming back cold.
+
+   Promote a concept to a `wiki/` page once it recurs; write a `learning-records/` entry only
+   on demonstrated understanding (never on coverage).
 
 ## Storage strength over fluency
 
@@ -61,7 +70,8 @@ leaks no clues.
 | `wiki/` | concept | Source-grounded **input** knowledge — what you read to learn. |
 | `RESOURCES.md` | — | Curated trusted sources (Knowledge vs. Wisdom), annotated, with explicit `## Gaps`. |
 | `notebooks/NN_topic.ipynb` | topic | Executable exploration. Reimplemented to the LA layer, asserts for correctness. |
-| `notebooks/NN_topic.md` | notebook | Sidecar: concepts covered / discussion (memory aid) / follow-ups. |
+| `notebooks/NN_topic.md` | notebook | Sidecar: transcript (fidelity) / retrieval cues (questions, no answers) / follow-ups. |
+| README `## Project Logs` | topic | Briefing — rolling cross-topic progress view; a few skimmable lines per topic. |
 | `learning-records/NNNN-slug.md` | — | ADR-style record of **demonstrated** understanding (not coverage). Written only on evidence; sets the next zone of proximal development. |
 | Glossary | term | Compressed **output** — a term added only once the user can use it correctly. Evidence of understanding, not a dictionary to read. |
 

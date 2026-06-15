@@ -23,13 +23,18 @@ foundation, but drop into stronger loops when I need more thorough understanding
    *reconstruct-on-demand* (rebuild a blanked function) or *predict-before-reveal* (call
    the tensor shapes/values before running). These rungs, plus spacing and interleaving of
    old material, build storage strength rather than the fluency illusion.
-4. **Distill** — sharp exchanges go into the sidecar; deferred depth goes into its
-   **Follow-ups** backlog (pulling one spawns a companion notebook `NNb_…`); demonstrated
-   understanding earns a `learning-records/` entry; recurring concepts graduate to `wiki/`.
+4. **Document** — the step fans out into distinct artifacts, each with its own job: a
+   **transcript** of the exchange (fidelity, lightly curated) and **retrieval cues**
+   (questions without answers, for spaced re-quiz) go into the sidecar; deferred depth goes
+   into the sidecar's **Follow-ups** backlog (pulling one spawns a companion notebook
+   `NNb_…`); a short **briefing** lands in this README's `## Project Logs` as the rolling
+   cross-topic progress view; demonstrated understanding earns a `learning-records/` entry;
+   recurring concepts graduate to `wiki/`.
 
 **Artifacts:** `MISSION.md` (the *why*, grounds everything) · `wiki/` (source-grounded input
 knowledge) · `RESOURCES.md` (curated sources) · `notebooks/NN_*.{ipynb,md}` (exploration +
-memory aid) · `learning-records/` (demonstrated understanding, ADR-style) · a glossary
+sidecar: transcript / retrieval cues / follow-ups) · `## Project Logs` below (rolling
+progress briefing) · `learning-records/` (demonstrated understanding, ADR-style) · a glossary
 (compressed output, terms added only once understood). `tinyterp/` and `tests/` stay empty
 until duplication forces an extraction.
 
@@ -44,6 +49,64 @@ precede SAEs so that disentangling features is *motivated* by a circuit that use
    source search.
 3. **Retroactively run the workflow on notebook 01** — dry-run the full loop end-to-end on
    existing material before applying it to new topics.
+
+## Roadmap
+
+Each topic runs the full per-session loop. The four subtasks below map to the workflow
+phases: **gather** (sources → `RESOURCES.md`, wiki pages with citations), **build**
+(`NN_topic.ipynb` + sidecar, reimplemented to the LA layer, asserts against a reference),
+**interrogate** (Socratic loop until satisfaction — escalate on demand), **document** (fan
+out into artifacts: transcript + retrieval cues + follow-ups in the sidecar, a briefing in
+`## Project Logs`, demonstrated understanding → `learning-records/`, recurring concepts → `wiki/`).
+
+### 0. Inference on a pre-trained model *(retroactive — notebook 01 already exists)*
+
+Dry-run the full loop end-to-end on existing material before applying it to new topics:
+stand up the environment and run inference on a pre-trained model (GPT-2).
+
+- [ ] **Gather** — wiki pages for the GPT-2 forward pass / tokenization / HF inference path,
+  cited in `RESOURCES.md`.
+- [x] **Build** — `01_gpt2_inference.ipynb` (exists; backfill the sidecar
+  `01_gpt2_inference.md` derived from the wiki).
+- [ ] **Interrogate** — run the Socratic loop on the existing notebook until satisfaction.
+- [ ] **Document** — sidecar (transcript / retrieval cues / follow-ups) + `## Project Logs`
+  briefing; `learning-record` only on demonstrated understanding.
+
+### 1. Transformer
+
+Reimplement the forward pass to the linear-algebra layer; pin against HF logits.
+
+- [ ] **Gather** — embeddings, attention, MLP, residual stream, LayerNorm.
+- [ ] **Build** — reimplement the forward pass; `assert reimpl_logits ≈ hf_logits`.
+- [ ] **Interrogate** — reconstruct-on-demand on attention; predict-before-reveal on shapes.
+- [ ] **Document** — sidecar (transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; promote recurring primitives to `wiki/`.
+
+### 2. Circuits
+
+Disentangle a concrete circuit first, so feature-finding (SAEs) is *motivated*.
+
+- [ ] **Gather** — induction heads, QK/OV, path patching / activation patching.
+- [ ] **Build** — isolate a circuit; verify by intervention.
+- [ ] **Interrogate** — Socratic, spaced re-quiz of transformer internals (interleave).
+- [ ] **Document** — sidecar (transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; `learning-record` on demonstrated understanding.
+
+### 3. Sparse Autoencoders
+
+Decompose the residual stream into interpretable features.
+
+- [ ] **Gather** — superposition, SAE architecture, sparsity penalties, dictionary learning.
+- [ ] **Build** — train/load an SAE on captured activations; inspect features.
+- [ ] **Interrogate** — Socratic, interleave circuits + transformer.
+- [ ] **Document** — sidecar (transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; promote recurring concepts to `wiki/`.
+
+### 4. Evaluations
+
+Measure whether the interpretability claims actually hold.
+
+- [ ] **Gather** — faithfulness/completeness metrics, ablation studies.
+- [ ] **Build** — evaluate a circuit or SAE against a metric.
+- [ ] **Interrogate** — Socratic, interleave all prior topics.
+- [ ] **Document** — sidecar (transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; `learning-record` on demonstrated understanding.
 
 ## Development Notes
 
@@ -79,6 +142,10 @@ code .
 ```
 
 ## Project Logs
+
+The rolling **briefing** the Document phase writes to — a short per-topic progress view,
+skimmable to re-orient when coming back cold. Fidelity lives in each notebook's sidecar; this
+is the cross-topic summary.
 
 ### Environment Setup
 
