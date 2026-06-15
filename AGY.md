@@ -20,6 +20,16 @@ difference between *coverage* and *learning*.
    anything. **Never teach from parametric memory** — if you can't cite it, you don't yet
    know it well enough to teach it. Track sources in `RESOURCES.md`; log holes in its
    `## Gaps`.
+   - **Delegate the read-and-extract to stay context-cheap.** Fan out one Gemini worker per
+     candidate source (`dispatching-parallel-agents` for the orchestration,
+     `delegating-to-gemini` for each worker), demanding a strict citation contract back:
+     verbatim quote + section/page locator + URL per claim, plus a "could not verify from the
+     source" list. Delegation moves the *labor*, not the *trust* — Gemini fetches and
+     extracts; you verify each quote actually supports its claim and spot-fetch the
+     load-bearing sources. **Never let Gemini's parametric memory stand in for a source** —
+     that's the same trap one rung removed. A second Gemini pass over the *drafted* page
+     ("which assertions lack a cited source, where do canonical sources disagree?") feeds
+     `RESOURCES.md`'s `## Gaps`.
 2. **Build.** Write the notebook (`notebooks/NN_topic.ipynb`) and its sidecar
    (`notebooks/NN_topic.md`) **derived from the wiki**, so the prose has a paper trail.
    Reimplement to the linear-algebra layer (torch tensor ops are the bottom primitive —
