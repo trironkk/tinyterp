@@ -35,10 +35,12 @@ it doesn't belong on a wiki page.
 
 | Concept | Page | Motivated by | Status |
 |---|---|---|---|
-| _(none yet — written during each notebook's Gather phase)_ | | | |
+| Byte-level BPE tokenization | [tokenization-bpe](./tokenization-bpe.md) | notebook 01 | Drafted (cited) |
+| The GPT-2 forward pass | [gpt2-forward-pass](./gpt2-forward-pass.md) | notebook 01 | Drafted (cited) |
+| HuggingFace inference path | [hf-inference-path](./hf-inference-path.md) | notebook 01 | Drafted (cited) |
 
-> This index is currently empty by design. The knowledge base has been **stood up**
-> (structure + curated sources), but per-topic concept pages are authored when a notebook
-> reaches them. The first batch will come from retroactively running the workflow on
-> `notebooks/01_gpt2_inference.ipynb` (transformer foundation: tokenization, embeddings,
-> the residual stream, attention, the unembedding).
+> First batch authored during notebook 01's Gather phase (transformer foundation at *overview*
+> altitude: tokenization → embeddings/residual-stream/attention/MLP → unembedding, plus the HF
+> reference path notebook 01 runs). Per-primitive pages (LayerNorm, attention QK/OV, MLP) are
+> deferred to the Transformer notebook (roadmap step 1), which reimplements them at the
+> linear-algebra layer — see each page's *Open threads*.

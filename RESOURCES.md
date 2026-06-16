@@ -96,6 +96,22 @@ fetched and verified on 2026-06-14.
 Deferred by the foundation-first scope — to be filled when a notebook reaches the topic, each
 seeded during that notebook's Gather phase:
 
+- **Notebook 01 forward-pass — two claims sourced to the reference model, not a primary source.**
+  [`wiki/gpt2-forward-pass.md`](./wiki/gpt2-forward-pass.md) currently backs two facts with the
+  HF `GPT2LMHeadModel` *module printout* rather than a paper: (a) GPT-2 uses **GELU**
+  (`NewGELUActivation`) — the GPT-2 paper §2.3 doesn't name the activation; and (b) GPT-2 uses
+  **learned** positional embeddings (`wpe=Embedding`) — §2.3 doesn't say "learned." Both trace to
+  the original GPT paper, [Radford et al. (2018), *Improving Language Understanding by Generative
+  Pre-Training*](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
+  ("The model largely follows the details of the OpenAI GPT model"). *Add GPT-1 as a Knowledge
+  entry and re-cite these two claims during the Transformer notebook's Gather (step 1), where
+  they get reimplemented anyway.*
+- **Delegated-extraction reliability.** The Gather for notebook 01 fell back to direct
+  self-verification: the fanned-out `agy`/Gemini extraction workers produced no output within the
+  timeout, and the drafted-page review pass returned a meta non-answer instead of engaging. The
+  citation rigor held (every quote was verified against the primary source directly), but the
+  *context-cheap* delegation goal did not. *Diagnose `agy --print` behavior (large prompts /
+  `--add-dir` not engaging tools) before relying on it for step 1's Gather.*
 - **Circuits (curriculum step 2).** Induction heads are *introduced* in the framework paper
   above, but the dedicated treatment is unfilled. Needed: [In-context Learning and Induction
   Heads](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)

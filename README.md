@@ -64,8 +64,10 @@ out into artifacts: transcript + retrieval cues + follow-ups in the sidecar, a b
 Dry-run the full loop end-to-end on existing material before applying it to new topics:
 stand up the environment and run inference on a pre-trained model (GPT-2).
 
-- [ ] **Gather** — wiki pages for the GPT-2 forward pass / tokenization / HF inference path,
-  cited in `RESOURCES.md`.
+- [x] **Gather** — wiki pages for the GPT-2 forward pass / tokenization / HF inference path,
+  cited in `RESOURCES.md` ([tokenization-bpe](./wiki/tokenization-bpe.md),
+  [gpt2-forward-pass](./wiki/gpt2-forward-pass.md), [hf-inference-path](./wiki/hf-inference-path.md);
+  two residual claims logged to `RESOURCES.md` `## Gaps`).
 - [x] **Build** — `01_gpt2_inference.ipynb` (exists; backfill the sidecar
   `01_gpt2_inference.md` derived from the wiki).
 - [ ] **Interrogate** — run the Socratic loop on the existing notebook until satisfaction.
