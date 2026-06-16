@@ -178,6 +178,33 @@ $ uv run jupyter nbconvert --to markdown --execute --stdout notebooks/01_gpt2_in
 
 > TODO
 
+## Backlog
+
+Cross-cutting work that isn't a curriculum topic — process/tooling fixes surfaced by a
+session, tracked here until pulled. (Topic-specific deferrals live in each notebook
+sidecar's *Follow-ups*; source gaps live in [`RESOURCES.md ## Gaps`](./RESOURCES.md#gaps).)
+
+### Fix Gemini delegation in the Gather phase
+
+The per-session loop's Gather step is meant to stay *context-cheap* by fanning out one Gemini
+worker per source ([`dispatching-parallel-agents`](./CLAUDE.md) + [`delegating-to-gemini`])
+to read-and-extract under a strict citation contract, with a second pass reviewing the drafted
+page for gaps. During notebook 01's Gather this **failed**: the `agy`/Gemini extraction workers
+produced no output within the timeout, and the drafted-page review pass returned a meta
+non-answer instead of engaging. Citation rigor still held — every quote was verified directly
+against its primary source — but the labor-saving delegation did not, so the whole Gather ran
+by hand. Until this is fixed, Gather defaults to direct self-verification (correct but not
+context-cheap).
+
+- [ ] Diagnose `agy --print` on large prompts and with `--add-dir` (does it engage tools / read
+  the provided context, or fall back to a bare model reply?).
+- [ ] Re-validate the `delegating-to-gemini` worker contract end-to-end on one source.
+- [ ] Re-validate the drafted-page gap-review pass returns substantive findings.
+- [ ] Confirm the orchestration (`dispatching-parallel-agents`) handles a worker timing out.
+
+Tracked in [`RESOURCES.md ## Gaps`](./RESOURCES.md#gaps) ("Delegated-extraction reliability").
+Resolve before step 1's Gather so the Transformer topic can run the loop as designed.
+
 ## Side Quests
 
 ### Automatic Differentiation
