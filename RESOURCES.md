@@ -107,12 +107,13 @@ seeded during that notebook's Gather phase:
   ("The model largely follows the details of the OpenAI GPT model"). *Add GPT-1 as a Knowledge
   entry and re-cite these two claims during the Transformer notebook's Gather (topic 2), where
   they get reimplemented anyway.*
-- **Delegated-extraction reliability.** The Gather for notebook 01 fell back to direct
-  self-verification: the fanned-out `agy`/Gemini extraction workers produced no output within the
-  timeout, and the drafted-page review pass returned a meta non-answer instead of engaging. The
-  citation rigor held (every quote was verified against the primary source directly), but the
-  *context-cheap* delegation goal did not. *Diagnose `agy --print` behavior (large prompts /
-  `--add-dir` not engaging tools) before relying on it for topic 2's Gather.*
+- **Delegated-extraction reliability — RESOLVED (2026-06-19).** The Gather for notebook 01 fell
+  back to direct self-verification: the fanned-out `agy`/Gemini extraction workers produced no
+  output and the review pass returned a meta non-answer. *Root cause:* `delegating-to-gemini`
+  documented the prompt as a positional arg, but `agy` 1.0.10 takes it as the **value of
+  `--print`** — the old form dropped the prompt entirely, so Gemini answered a blank prompt with
+  a generic self-ID. Fixed the skill and validated tool use + `--add-dir` extraction end-to-end.
+  See [README "Fix Gemini delegation"](./README.md). Delegation is usable for topic 2's Gather.
 - **Circuits (curriculum topic 3).** Induction heads are *introduced* in the framework paper
   above, but the dedicated treatment is unfilled. Needed: [In-context Learning and Induction
   Heads](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)

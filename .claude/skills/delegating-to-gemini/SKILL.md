@@ -26,7 +26,7 @@ load-bearing part of the current task. Don't delegate the thing you're supposed 
 
 | Flag | Purpose |
 |---|---|
-| `--print` / `-p` | Single-shot, non-interactive; prints the response. Prompt is a **positional arg**. |
+| `--print "<prompt>"` / `-p` | Single-shot, non-interactive; prints the response. The prompt is the flag's **value**, *not* a positional arg — put it **last** (see Pattern). |
 | `--model "<name>"` | Exact name from `agy models`, e.g. `Gemini 3.5 Flash (Low\|Medium\|High)`. |
 | `--print-timeout 15m` | Raise from the 5m default for long jobs. |
 | `--add-dir <path>` | Give Gemini read access to a directory (repeatable). |
@@ -39,20 +39,30 @@ Tiers are reasoning effort: **Low** for cheap bulk, **Medium** as the default wo
 ## Pattern
 
 ```bash
-# Run from a neutral cwd (e.g. /tmp) so this repo's AGY.md doesn't reframe Gemini.
-agy --print --model "Gemini 3.5 Flash (Medium)" \
-  "Summarize the key claims in the following text as a bullet list:\n\n<text>"
+# Run from a neutral cwd (e.g. /tmp) so this repo's AGY.md doesn't leak workspace context.
+# The prompt is the VALUE of --print, so --print goes LAST; all other flags come before it.
+cd /tmp && agy --model "Gemini 3.5 Flash (Medium)" \
+  --print "Summarize the key claims in the following text as a bullet list:\n\n<text>"
 ```
+
+The prompt **must be the value of `--print`/`-p`**. If you instead pass it as a trailing
+positional (`agy --print --model "…" "<prompt>"`), `--print` swallows `--model` as its
+value, `--model` silently falls back to default, and your real prompt is dropped — Gemini
+then answers some empty/default prompt with a generic self-identification
+("I am running on Gemini 3.5 Flash"). That degenerate reply is the signature of this bug.
 
 If the task needs repo files, run from the repo (or pass `--add-dir`) and make the prompt
 fully self-contained — Gemini has no other context.
 
 ## Common mistakes
 
+- **Prompt as a trailing positional is silently dropped** (see Pattern) — the #1 failure
+  mode. Always pass it as the value of `--print`/`-p`, placed last.
 - **Unrecognized `--model` value silently falls back** to the default Flash (no error).
   Copy names verbatim from `agy models`.
-- **Piping the prompt via stdin prints help.** Pass the prompt as a positional argument.
-- **Running inside this repo loads `AGY.md`**, so Gemini answers as the interp "teacher."
-  Run from a neutral directory, or override with an explicit, self-contained prompt.
+- **Piping the prompt via stdin prints help.** Pass the prompt as the `--print` value.
+- **Running inside this repo loads `AGY.md`**, so Gemini picks up the tinyterp workspace
+  context (it'll claim to be working on the project). Run from a neutral directory like
+  `/tmp`, and keep the prompt explicit and self-contained.
 - **Long delegations cut off at 5m.** Set `--print-timeout`.
 - **Assuming shared context.** It's stateless — restate everything Gemini needs in the prompt.

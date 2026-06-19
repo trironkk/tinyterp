@@ -212,26 +212,36 @@ Cross-cutting work that isn't a curriculum topic — process/tooling fixes surfa
 session, tracked here until pulled. (Topic-specific deferrals live in each notebook
 sidecar's *Follow-ups*; source gaps live in [`RESOURCES.md ## Gaps`](./RESOURCES.md#gaps).)
 
-### Fix Gemini delegation in the Gather phase
+### Fix Gemini delegation in the Gather phase — RESOLVED (2026-06-19)
 
 The per-session loop's Gather step is meant to stay *context-cheap* by fanning out one Gemini
 worker per source ([`dispatching-parallel-agents`](./CLAUDE.md) + [`delegating-to-gemini`])
 to read-and-extract under a strict citation contract, with a second pass reviewing the drafted
 page for gaps. During notebook 01's Gather this **failed**: the `agy`/Gemini extraction workers
-produced no output within the timeout, and the drafted-page review pass returned a meta
-non-answer instead of engaging. Citation rigor still held — every quote was verified directly
-against its primary source — but the labor-saving delegation did not, so the whole Gather ran
-by hand. Until this is fixed, Gather defaults to direct self-verification (correct but not
-context-cheap).
+produced no output, and the drafted-page review pass returned a meta non-answer instead of
+engaging. Citation rigor still held — every quote was verified directly against its primary
+source — but the labor-saving delegation did not, so the whole Gather ran by hand.
 
-- [ ] Diagnose `agy --print` on large prompts and with `--add-dir` (does it engage tools / read
-  the provided context, or fall back to a bare model reply?).
-- [ ] Re-validate the `delegating-to-gemini` worker contract end-to-end on one source.
-- [ ] Re-validate the drafted-page gap-review pass returns substantive findings.
-- [ ] Confirm the orchestration (`dispatching-parallel-agents`) handles a worker timing out.
+**Root cause:** the `delegating-to-gemini` skill documented the prompt as a *positional arg*.
+In `agy` 1.0.10 the prompt must be the **value of `--print`/`-p`**, so `agy --print --model "…"
+"<prompt>"` made `--print` swallow `--model` as its value, `--model` silently fell back to
+default, and the real prompt was dropped — Gemini answered an empty prompt with a generic
+self-identification ("I am running on Gemini 3.5 Flash"), the exact "meta non-answer" seen
+above. Nothing was wrong with the network, tools, large prompts, or `--add-dir`.
 
-Tracked in [`RESOURCES.md ## Gaps`](./RESOURCES.md#gaps) ("Delegated-extraction reliability").
-Resolve before topic 2's Gather so the Transformer topic can run the loop as designed.
+**Fix:** corrected the invocation throughout `delegating-to-gemini` (prompt as `--print`'s
+value, placed last). Validated end-to-end on 2026-06-19:
+
+- [x] Diagnosed `agy --print` — tool use (web search) and `--add-dir` both engage correctly
+  once the prompt actually reaches the model; the failure was 100% the dropped-prompt bug.
+- [x] Re-validated the worker contract end-to-end: `--add-dir` over `wiki/` returned verbatim
+  quotes + section headings under the citation contract.
+- [x] Re-validated tool engagement: web-search and file-read calls both return substantive
+  results (no `--dangerously-skip-permissions` needed).
+- [ ] Confirm the orchestration (`dispatching-parallel-agents`) handles a worker timing out
+  (untested — no longer blocking, since workers now produce output).
+
+Topic 2's Gather can run the loop as designed.
 
 ## Side Quests
 
