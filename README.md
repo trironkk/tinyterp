@@ -96,7 +96,16 @@ reimplementation).
 
 Reimplement the forward pass to the linear-algebra layer; pin against HF logits.
 
-- [ ] **Gather** — embeddings, attention, MLP, residual stream, LayerNorm.
+- [ ] **Gather** — embeddings, attention, MLP, residual stream, LayerNorm. **First actions,
+  carried over from notebook 01:** (a) add **GPT-1 (Radford 2018)** to `RESOURCES.md` and re-cite
+  the **GELU** and **learned positional embedding** claims to a primary source — they're currently
+  read off the HF module printout ([`RESOURCES.md` Gaps](./RESOURCES.md#gaps)); (b) re-verify the
+  existing [`gpt2-forward-pass`](./wiki/gpt2-forward-pass.md) page rather than inheriting it as
+  "done". For the **per-primitive** pages (LayerNorm, fused `c_attn` Q/K/V split, causal mask,
+  multi-head reshape, weight-tied unembed, `Conv1D`-vs-`Linear` weight layout) weight toward the
+  **implementation sources** (HF / OpenAI code) for exact tensor layout, papers for the *why* —
+  layout facts the `≈` assert will catch anyway can stay provisional; a wrong *mental model* it
+  can't catch cannot.
 - [ ] **Build** — reimplement the forward pass; `assert reimpl_logits ≈ hf_logits`.
 - [ ] **Interrogate** — Socratic; pull *reconstruct-on-demand* on attention or *predict-before-reveal* on shapes for depth.
 - [ ] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; promote recurring primitives to `wiki/`.
