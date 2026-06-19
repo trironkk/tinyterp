@@ -42,5 +42,5 @@ it doesn't belong on a wiki page.
 > First batch authored during notebook 01's Gather phase (transformer foundation at *overview*
 > altitude: tokenization → embeddings/residual-stream/attention/MLP → unembedding, plus the HF
 > reference path notebook 01 runs). Per-primitive pages (LayerNorm, attention QK/OV, MLP) are
-> deferred to the Transformer notebook (roadmap step 1), which reimplements them at the
+> deferred to the Transformer notebook (roadmap topic 2), which reimplements them at the
 > linear-algebra layer — see each page's *Open threads*.

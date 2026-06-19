@@ -89,7 +89,7 @@ unequal length.
 
 ## Why this page exists
 
-This is the **trusted reference**. The Transformer notebook (roadmap step 1) reimplements the
+This is the **trusted reference**. The Transformer notebook (roadmap topic 2) reimplements the
 forward pass at the linear-algebra layer and pins it with `assert reimpl_logits ≈ hf_logits`
 against exactly this path — so the contract is: *same `input_ids` in, same logits out*, with
 dropout disabled and no sampling randomness.
@@ -99,4 +99,4 @@ dropout disabled and no sampling randomness.
 - KV-caching (`past_key_values` / `use_cache`) makes the loop O(n) instead of O(n²) but doesn't
   change the logits. Deferred — notebook 01 doesn't depend on it.
 - The exact `argmax` tie-breaking and float determinism across devices: only matters when
-  tightening the `≈` tolerance in the reimplementation. Revisit in step 1.
+  tightening the `≈` tolerance in the reimplementation. Revisit in topic 2.

@@ -60,7 +60,9 @@ precede SAEs so that disentangling features is *motivated* by a circuit that use
 
 ## Roadmap
 
-Each topic runs the full per-session loop. The four subtasks below map to the workflow
+Each topic runs the full per-session loop. **Topic numbers align with notebook numbers**
+(topic *N* ↔ `notebooks/0N_…`), so there's no off-by-one between the roadmap and the files.
+The four subtasks below map to the workflow
 phases: **gather** (sources → `RESOURCES.md`, wiki pages with citations), **build**
 (`NN_topic.ipynb` + sidecar, reimplemented to the LA layer, asserts against a reference),
 **interrogate** (Socratic by default, deeper interaction modes on demand, ends on my own
@@ -68,22 +70,29 @@ judgment), **document** (fan out into memory aids: resume bookmark + transcript 
 cues + follow-ups in the sidecar, a briefing in `## Project Logs`, an ungated
 `learning-records/` entry, recurring concepts → `wiki/`).
 
-### 0. Inference on a pre-trained model *(retroactive — notebook 01 already exists)*
+### 1. Inference on a pre-trained model *(notebook `01` — retroactive, already exists)*
 
-Dry-run the full loop end-to-end on existing material before applying it to new topics:
-stand up the environment and run inference on a pre-trained model (GPT-2).
+Dry-run the full loop end-to-end on existing material before applying it to new topics.
+The **goal is a working environment** — confirm the toolchain (`uv`, torch on the right
+device, `transformers`, model/tokenizer download) is configured end-to-end and future
+notebooks can rely on it. Running GPT-2 inference is the **smoke test** that proves it, not
+the subject of study; GPT-2's architecture is out of scope here (it's the topic-2
+reimplementation).
 
 - [x] **Gather** — wiki pages for the GPT-2 forward pass / tokenization / HF inference path,
   cited in `RESOURCES.md` ([tokenization-bpe](./wiki/tokenization-bpe.md),
   [gpt2-forward-pass](./wiki/gpt2-forward-pass.md), [hf-inference-path](./wiki/hf-inference-path.md);
   two residual claims logged to `RESOURCES.md` `## Gaps`).
-- [x] **Build** — `01_gpt2_inference.ipynb` (exists; backfill the sidecar
-  `01_gpt2_inference.md` derived from the wiki).
-- [ ] **Interrogate** — Socratic on the existing notebook; ends on my own judgment.
-- [ ] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) +
-  `## Project Logs` briefing; ungated `learning-record` experience-log entry.
+- [x] **Build** — `01_gpt2_inference.ipynb` (exists; sidecar
+  [`01_gpt2_inference.md`](./notebooks/01_gpt2_inference.md) backfilled as session memory aids).
+- [x] **Interrogate** — fast Socratic on the notebook *as an environment smoke test* (device
+  plumbing / eval-determinism / HF download-cache); ended on my own judgment. Tokenizer
+  round-trip deferred to the sidecar Follow-ups.
+- [x] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) +
+  `## Project Logs` briefing below; learning-record
+  [`0001-gpt2-inference-environment`](./learning-records/0001-gpt2-inference-environment.md).
 
-### 1. Transformer
+### 2. Transformer *(notebook `02`)*
 
 Reimplement the forward pass to the linear-algebra layer; pin against HF logits.
 
@@ -92,7 +101,7 @@ Reimplement the forward pass to the linear-algebra layer; pin against HF logits.
 - [ ] **Interrogate** — Socratic; pull *reconstruct-on-demand* on attention or *predict-before-reveal* on shapes for depth.
 - [ ] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; promote recurring primitives to `wiki/`.
 
-### 2. Circuits
+### 3. Circuits *(notebook `03`)*
 
 Disentangle a concrete circuit first, so feature-finding (SAEs) is *motivated*.
 
@@ -101,7 +110,7 @@ Disentangle a concrete circuit first, so feature-finding (SAEs) is *motivated*.
 - [ ] **Interrogate** — Socratic; open with cold cues on transformer internals (interleave).
 - [ ] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; ungated `learning-record` experience-log entry.
 
-### 3. Sparse Autoencoders
+### 4. Sparse Autoencoders *(notebook `04`)*
 
 Decompose the residual stream into interpretable features.
 
@@ -110,7 +119,7 @@ Decompose the residual stream into interpretable features.
 - [ ] **Interrogate** — Socratic; open with cold cues across circuits + transformer (interleave).
 - [ ] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; promote recurring concepts to `wiki/`.
 
-### 4. Evaluations
+### 5. Evaluations *(notebook `05`)*
 
 Measure whether the interpretability claims actually hold.
 
@@ -171,6 +180,16 @@ $ uv run jupyter nbconvert --to markdown --execute --stdout notebooks/01_gpt2_in
 # Runs the notebook
 ```
 
+**Topic 1 — loop complete (2026-06-19).** Notebook 01 reads as an **environment smoke test**
+across three independent failure surfaces: device plumbing (mismatch fails loud, wrong-choice
+fails silent), `.eval()`/determinism (a *mode* bug, not a math bug; greedy decoding cascades
+dropout noise into a different sentence), and the HF download/cache pipeline (the only line
+exercising network+hub+deserialize; the pretrained weights are topic 2's reference oracle).
+Toolchain confirmed wired end-to-end. Fluency, not evidence — topic 2 is the real test.
+Deferred: tokenizer round-trip (sidecar Follow-ups). See
+[`notebooks/01_gpt2_inference.md`](./notebooks/01_gpt2_inference.md),
+[`learning-records/0001`](./learning-records/0001-gpt2-inference-environment.md).
+
 ### Transformer
 
 > TODO
@@ -212,7 +231,7 @@ context-cheap).
 - [ ] Confirm the orchestration (`dispatching-parallel-agents`) handles a worker timing out.
 
 Tracked in [`RESOURCES.md ## Gaps`](./RESOURCES.md#gaps) ("Delegated-extraction reliability").
-Resolve before step 1's Gather so the Transformer topic can run the loop as designed.
+Resolve before topic 2's Gather so the Transformer topic can run the loop as designed.
 
 ## Side Quests
 

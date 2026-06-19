@@ -104,23 +104,23 @@ seeded during that notebook's Gather phase:
   the original GPT paper, [Radford et al. (2018), *Improving Language Understanding by Generative
   Pre-Training*](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
   ("The model largely follows the details of the OpenAI GPT model"). *Add GPT-1 as a Knowledge
-  entry and re-cite these two claims during the Transformer notebook's Gather (step 1), where
+  entry and re-cite these two claims during the Transformer notebook's Gather (topic 2), where
   they get reimplemented anyway.*
 - **Delegated-extraction reliability.** The Gather for notebook 01 fell back to direct
   self-verification: the fanned-out `agy`/Gemini extraction workers produced no output within the
   timeout, and the drafted-page review pass returned a meta non-answer instead of engaging. The
   citation rigor held (every quote was verified against the primary source directly), but the
   *context-cheap* delegation goal did not. *Diagnose `agy --print` behavior (large prompts /
-  `--add-dir` not engaging tools) before relying on it for step 1's Gather.*
-- **Circuits (curriculum step 2).** Induction heads are *introduced* in the framework paper
+  `--add-dir` not engaging tools) before relying on it for topic 2's Gather.*
+- **Circuits (curriculum topic 3).** Induction heads are *introduced* in the framework paper
   above, but the dedicated treatment is unfilled. Needed: [In-context Learning and Induction
   Heads](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)
   and the IOI / "Interpretability in the Wild" circuit (activation patching, path patching,
   direct logit attribution). *Verify and annotate when notebook on circuits begins.*
-- **Sparse Autoencoders (curriculum step 3).** No source seeded. Needed: Anthropic's
+- **Sparse Autoencoders (curriculum topic 4).** No source seeded. Needed: Anthropic's
   "Towards Monosemanticity" / "Scaling Monosemanticity" and a canonical SAE-training
   walkthrough. *Gather when circuits motivate feature disentangling.*
-- **Evaluations (curriculum step 4).** No source seeded. Needed: a trusted treatment of
+- **Evaluations (curriculum topic 5).** No source seeded. Needed: a trusted treatment of
   interp-flavored evals / benchmarks. *Scope is least defined; revisit after SAEs.*
 - **Tooling deep-dive.** TransformerLens is referenced as a *reference*, not yet adopted —
   tinyterp reimplements at the LA layer first. Promote to a full Knowledge entry only if/when
