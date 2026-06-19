@@ -24,7 +24,9 @@ At the highest level the data flow is exactly three stages
 > "A transformer starts with a token embedding, followed by a series of 'residual blocks', and
 > finally a token unembedding."
 
-For GPT-2 small (the `gpt2` checkpoint, *117M* params): **12 layers, d_model 768**
+For GPT-2 small (the `gpt2` checkpoint, *117M* params as reported in the paper — the checkpoint
+is ~124M by the standard parameter count, the paper's 117M being a known undercount): **12
+layers, d_model 768**
 ([GPT-2 paper, Table 2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf);
 HF config `n_layer`/`n_embd` *"defaults to `12`"*/`768`), vocab **50,257**, context **1024**.
 The notebook's module printout matches: `wte=Embedding(50257,768)`, `wpe=Embedding(1024,768)`,

@@ -8,7 +8,8 @@ split mirrors the [teach RESOURCES format](./.claude/vendor/mattpocock-skills/sk
 Scope is **foundation-first** ([per the mission](./MISSION.md)): field-level entry points + the
 transformer foundation needed for notebooks 01–02. Circuits, SAEs, and evals are deliberately
 deferred to [`## Gaps`](#gaps) until a notebook reaches them (YAGNI). All links below were
-fetched and verified on 2026-06-14.
+fetched and verified on 2026-06-14 (the source search); the individual quotes pulled into the
+wiki pages were re-verified against these sources on 2026-06-15 (when those pages were drafted).
 
 ## Knowledge
 
