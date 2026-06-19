@@ -40,9 +40,12 @@ Tiers are reasoning effort: **Low** for cheap bulk, **Medium** as the default wo
 
 ```bash
 # Run from a neutral cwd (e.g. /tmp) so this repo's AGY.md doesn't leak workspace context.
+# Use a SUBSHELL `( cd /tmp && … )` so the parent shell's cwd never drifts — a bare
+# `cd /tmp && …` leaves the harness to reset the cwd and print a "Shell cwd was reset to …"
+# notice on every call (wasted tokens).
 # The prompt is the VALUE of --print, so --print goes LAST; all other flags come before it.
-cd /tmp && agy --model "Gemini 3.5 Flash (Medium)" \
-  --print "Summarize the key claims in the following text as a bullet list:\n\n<text>"
+( cd /tmp && agy --model "Gemini 3.5 Flash (Medium)" \
+  --print "Summarize the key claims in the following text as a bullet list:\n\n<text>" )
 ```
 
 The prompt **must be the value of `--print`/`-p`**. If you instead pass it as a trailing
