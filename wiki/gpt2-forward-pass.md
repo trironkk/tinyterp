@@ -12,7 +12,10 @@
 > [Vaswani et al. 2017](../RESOURCES.md#transformer-foundation-notebooks-0102),
 > [Elhage et al. 2021, A Mathematical Framework](../RESOURCES.md#transformer-foundation-notebooks-0102),
 > [HF GPT-2 docs](../RESOURCES.md#transformer-foundation-notebooks-0102). Quotes verified against
-> the primary sources on 2026-06-15.
+> the primary sources on 2026-06-15; **re-verified 2026-06-19** during topic 2's Gather, when the
+> two formerly-provisional claims (GELU, learned positional embeddings) were re-cited to the
+> [GPT-1 paper](../RESOURCES.md#transformer-foundation-notebooks-0102) and the architecture was
+> reconciled against the installed HF source (pre-LN block wiring, head shapes, weight tying).
 
 ## The shape of it
 
@@ -67,8 +70,13 @@ final norm before the unembedding — visible as `ln_1`, `ln_2`, `ln_f` in the m
 Two learned lookup tables, summed:
 - **`wte`** (`Embedding(50257, 768)`): token → vector.
 - **`wpe`** (`Embedding(1024, 768)`): absolute position → vector. GPT-2 uses **learned**
-  positional embeddings (the printout shows `wpe` as a plain `Embedding`), unlike Vaswani's
-  fixed sinusoids — but the *reason* is Vaswani's:
+  positional embeddings — a choice it inherits from GPT-1, whose paper states it directly
+  (the GPT-2 paper §2.3 doesn't, and the HF printout only shows `wpe` as a plain `Embedding`):
+
+  > "We used learned position embeddings instead of the sinusoidal version proposed in the
+  > original work." — [GPT-1, Radford et al. 2018, §4.1](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
+
+  The *reason* for injecting position at all is Vaswani's:
 
   > "Since our model contains no recurrence and no convolution, in order for the model to make
   > use of the order of the sequence, we must inject some information about the ... position of
@@ -120,9 +128,16 @@ identically at every position ([Vaswani §3.3](https://arxiv.org/abs/1706.03762)
 > and the inner-layer has dimensionality dff = 2048."
 
 That's the **4× expansion** pattern. GPT-2 keeps the 4× (`c_fc=Conv1D(nf=3072)` = `4 × 768`,
-`c_proj` back to 768) but swaps the activation: the printout shows `NewGELUActivation`, i.e.
-GELU rather than Vaswani's ReLU. *(The paper text pulled here doesn't state the activation; this
-is read off the reference model — see Open threads.)*
+`c_proj` back to 768) but swaps the activation from Vaswani's ReLU to **GELU** — a choice
+inherited from GPT-1:
+
+> "For the activation function, we used the Gaussian Error Linear Unit (GELU)." — [GPT-1,
+> Radford et al. 2018, §4.1](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
+
+HF's config sets `activation_function="gelu_new"` (`NewGELUActivation`), which is specifically
+the **tanh approximation** of GELU from [Hendrycks & Gimpel (2016), §2](https://arxiv.org/abs/1606.08415):
+`0.5·x·(1 + tanh[√(2/π)·(x + 0.044715·x³)])` — the exact form reimplemented in the
+[GELU page](./gelu.md) (paper: *"we used the former in every experiment"*).
 
 ## Stage 3 — Unembedding (out of the stream)
 
@@ -152,13 +167,19 @@ not exercised by notebook 01.
 
 ## Open threads (→ Transformer notebook, roadmap topic 2)
 
-- **Reimplement each primitive to the LA layer** and pin `assert reimpl_logits ≈ hf_logits`:
-  LayerNorm (mean/var normalize + affine), the fused `c_attn` split into Q/K/V, the causal mask,
-  multi-head reshape, GELU, weight-tied unembedding.
-- **GELU vs ReLU**: confirm GPT-2's exact activation (`NewGELUActivation` = the tanh-approx
-  GELU) from a primary source, not just the HF module name — currently read off the reference
-  model. Seed during topic 2's Gather.
-- **`Conv1D` vs `Linear`**: GPT-2's `Conv1D` is a transposed-weight linear layer; reconcile its
-  weight layout when reimplementing so the matmuls line up.
+- **Reimplement each primitive to the LA layer** and pin `assert reimpl_logits ≈ hf_logits`.
+  Per-primitive detail pages compiled during topic 2's Gather (paper for the *why*, installed HF
+  source for the *exact shapes*):
+  - [`conv1d-vs-linear`](./conv1d-vs-linear.md) — the transposed-weight layout gotcha (every
+    `c_attn`/`c_proj`/`c_fc` is a `Conv1D`).
+  - [`layernorm`](./layernorm.md) — per-token mean/var normalize + per-feature affine; pre-LN
+    placement.
+  - [`attention`](./attention.md) — fused `c_attn` Q/K/V split, multi-head reshape, the causal
+    mask, `1/√head_dim` scaling.
+  - [`gelu`](./gelu.md) — the tanh-approx activation (`"gelu_new"`).
+- **GELU vs ReLU — RESOLVED (2026-06-19).** GPT-2 inherits GELU from GPT-1 (§4.1); HF's
+  `"gelu_new"` is the tanh approximation from Hendrycks & Gimpel (2016). See [`gelu`](./gelu.md).
+- **Weight-tied unembedding**: `lm_head` reuses `wte` (config `tie_word_embeddings=True`) — pin
+  this when reimplementing the unembedding so a single matrix bookends the stream.
 - **Privileged basis / superposition**: the Framework's claim that the residual stream has no
   privileged basis is the bridge to the SAE topic; defer until then.

@@ -36,11 +36,17 @@ it doesn't belong on a wiki page.
 | Concept | Page | Motivated by | Status |
 |---|---|---|---|
 | Byte-level BPE tokenization | [tokenization-bpe](./tokenization-bpe.md) | notebook 01 | Drafted (cited) |
-| The GPT-2 forward pass | [gpt2-forward-pass](./gpt2-forward-pass.md) | notebook 01 | Drafted (cited) |
+| The GPT-2 forward pass | [gpt2-forward-pass](./gpt2-forward-pass.md) | notebook 01 | Drafted (cited); re-verified 2026-06-19 |
 | HuggingFace inference path | [hf-inference-path](./hf-inference-path.md) | notebook 01 | Drafted (cited) |
+| `Conv1D` vs `nn.Linear` (weight layout) | [conv1d-vs-linear](./conv1d-vs-linear.md) | notebook 02 | Drafted (cited) |
+| LayerNorm | [layernorm](./layernorm.md) | notebook 02 | Drafted (cited) |
+| Attention (fused QKV, multi-head, causal) | [attention](./attention.md) | notebook 02 | Drafted (cited) |
+| GELU (`"gelu_new"`) | [gelu](./gelu.md) | notebook 02 | Drafted (cited) |
 
 > First batch authored during notebook 01's Gather phase (transformer foundation at *overview*
 > altitude: tokenization → embeddings/residual-stream/attention/MLP → unembedding, plus the HF
-> reference path notebook 01 runs). Per-primitive pages (LayerNorm, attention QK/OV, MLP) are
-> deferred to the Transformer notebook (roadmap topic 2), which reimplements them at the
-> linear-algebra layer — see each page's *Open threads*.
+> reference path notebook 01 runs). The **per-primitive pages** (`conv1d-vs-linear`, `layernorm`,
+> `attention`, `gelu`) were compiled during notebook 02's Gather (2026-06-19) at the
+> *linear-algebra* altitude — paper for the *why*, the installed HF source for the *exact tensor
+> layout* the `≈ hf_logits` assert runs against. QK/OV circuit decomposition stays deferred to the
+> circuits topic.

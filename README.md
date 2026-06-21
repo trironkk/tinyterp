@@ -96,16 +96,17 @@ reimplementation).
 
 Reimplement the forward pass to the linear-algebra layer; pin against HF logits.
 
-- [ ] **Gather** — embeddings, attention, MLP, residual stream, LayerNorm. **First actions,
-  carried over from notebook 01:** (a) add **GPT-1 (Radford 2018)** to `RESOURCES.md` and re-cite
-  the **GELU** and **learned positional embedding** claims to a primary source — they're currently
-  read off the HF module printout ([`RESOURCES.md` Gaps](./RESOURCES.md#gaps)); (b) re-verify the
-  existing [`gpt2-forward-pass`](./wiki/gpt2-forward-pass.md) page rather than inheriting it as
-  "done". For the **per-primitive** pages (LayerNorm, fused `c_attn` Q/K/V split, causal mask,
-  multi-head reshape, weight-tied unembed, `Conv1D`-vs-`Linear` weight layout) weight toward the
-  **implementation sources** (HF / OpenAI code) for exact tensor layout, papers for the *why* —
-  layout facts the `≈` assert will catch anyway can stay provisional; a wrong *mental model* it
-  can't catch cannot.
+- [x] **Gather** *(2026-06-19)* — added **GPT-1 (Radford 2018)**, the **GELU** (Hendrycks &
+  Gimpel 2016) and **LayerNorm** (Ba et al. 2016) papers, and the **HF modeling source** to
+  `RESOURCES.md`; (a) re-cited the GELU + learned-positional-embedding claims to GPT-1 §4.1
+  (primary source, no longer read off the HF printout) and (b) re-verified
+  [`gpt2-forward-pass`](./wiki/gpt2-forward-pass.md). Compiled four per-primitive pages at the
+  LA-layer altitude — [`conv1d-vs-linear`](./wiki/conv1d-vs-linear.md),
+  [`layernorm`](./wiki/layernorm.md), [`attention`](./wiki/attention.md),
+  [`gelu`](./wiki/gelu.md) — paper for the *why*, the **installed** HF source for exact tensor
+  layout. Delegation note: Gemini extracted papers cleanly but **refused to quote code**, so code
+  layout was self-fetched from `.venv`; the second review pass was run by hand (`agy` died with no
+  output). Residual layout item logged to [`RESOURCES.md` Gaps](./RESOURCES.md#gaps).
 - [ ] **Build** — reimplement the forward pass; `assert reimpl_logits ≈ hf_logits`.
 - [ ] **Interrogate** — Socratic; pull *reconstruct-on-demand* on attention or *predict-before-reveal* on shapes for depth.
 - [ ] **Document** — sidecar (resume bookmark / transcript / retrieval cues / follow-ups) + `## Project Logs` briefing; promote recurring primitives to `wiki/`.
