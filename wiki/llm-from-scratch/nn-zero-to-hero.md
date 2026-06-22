@@ -1,7 +1,7 @@
 # Neural Networks: Zero to Hero (Karpathy Course)
 
-> Sources: Andrej Karpathy, Unknown
-> Raw: [nn-zero-to-hero](../../raw/llm-from-scratch/nn-zero-to-hero.md)
+> Sources: Andrej Karpathy, Unknown; Andrej Karpathy ("Let's build GPT" lecture repo), 2023-01-17
+> Raw: [nn-zero-to-hero](../../raw/llm-from-scratch/nn-zero-to-hero.md); [Let's build GPT (ng-video-lecture)](../../raw/llm-from-scratch/2023-01-17-lets-build-gpt-ng-video-lecture.md)
 
 ## Overview
 
@@ -28,8 +28,12 @@ The course progresses through eight lectures, each layering one new idea onto th
    build intuition for gradient flow through the compute graph.
 6. **Makemore Part 5 — WaveNet architecture.** Develop a hierarchical/convolutional model and
    practice a realistic deep-learning development workflow.
-7. **Building GPT from Scratch.** Construct a Generatively Pretrained Transformer following
-   "Attention Is All You Need" and the GPT-2/3 architectures.
+7. **Building GPT from Scratch** ("Let's build GPT: from scratch, in code, spelled out").
+   Construct a Generatively Pretrained Transformer following "Attention Is All You Need" and the
+   GPT-2/3 architectures. The code for this lecture is also published as a standalone repo
+   (`ng-video-lecture`) so the build can be hacked and its `git log` walked step by step. Karpathy
+   notes the video skips weight initialization — important for good convergence — and points to
+   nanoGPT's `_init_weights` for the proper treatment.
 8. **GPT Tokenizer.** Build the Byte Pair Encoding tokenization pipeline and explain the LLM
    quirks that trace back to tokenizer design.
 
@@ -50,3 +54,9 @@ introduced, so the learner sees exactly what attention, normalization, and backp
 
 - [microGPT](microgpt.md) — Karpathy's ~200-line implementation that packages the same
   micrograd → makemore → GPT progression into a single dependency-free file.
+- [nanoGPT & nanochat](nanogpt-and-nanochat.md) — the performance-oriented PyTorch codebases that
+  the "Building GPT from Scratch" lecture leads into.
+- [The Transformer Architecture](transformer-architecture.md) — reference for the GPT architecture
+  built in lecture 7.
+- [Mechanistic Interpretability: Circuits](../mech-interp/circuits.md) — the natural next step:
+  reverse-engineering the networks this course teaches you to build.

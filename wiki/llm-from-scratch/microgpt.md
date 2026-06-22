@@ -62,3 +62,7 @@ nothing is hidden behind framework abstractions.
 
 - [Neural Networks: Zero to Hero](nn-zero-to-hero.md) — Karpathy's course that builds up
   the same components (micrograd, makemore, GPT) incrementally.
+- [nanoGPT & nanochat](nanogpt-and-nanochat.md) — the PyTorch-backed, performance-oriented
+  siblings that scale the same GPT design up to GPT-2 reproduction and a full chat pipeline.
+- [The Transformer Architecture](transformer-architecture.md) — reference for the GPT-2-style
+  Transformer that microGPT implements.
