@@ -1,3 +1,6 @@
 [submodule ".claude/skills/mattpocock-skills"]
 	path = vendor/mattpocock-skills
 	url = https://github.com/mattpocock/skills
+[submodule "vendor/karpathy-llm-wiki"]
+	path = vendor/karpathy-llm-wiki
+	url = https://github.com/Astro-Han/karpathy-llm-wiki
