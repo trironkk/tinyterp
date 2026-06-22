@@ -18,7 +18,7 @@ Every session follows three steps:
 
 | Notebook | Description |
 |----------|-------------|
-| [microgpt-wiki](./notebooks/microgpt-wiki.ipynb) | Recreate Karpathy's microGPT, trained on Wikipedia (Simple English) with a from-scratch BPE tokenizer and a GPT-2-style Transformer built from raw PyTorch tensor ops. |
+| [01_microgpt-wiki](./notebooks/01_microgpt-wiki.ipynb) | Recreate Karpathy's microGPT, trained on Wikipedia (Simple English) with a from-scratch BPE tokenizer and a GPT-2-style Transformer built from raw PyTorch tensor ops. |
 
 ## Knowledge base
 
