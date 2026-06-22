@@ -202,7 +202,16 @@ Deferred: tokenizer round-trip (sidecar Follow-ups). See
 
 ### Transformer
 
-> TODO
+**Topic 2 — Build done, Interrogate partial (2026-06-21).** Notebook 02 reimplements GPT-2-small's
+forward pass from raw tensor ops (no `nn.Module`, no autodiff) and pins it green against pretrained
+HF (`max abs diff ~1e-5`, `argmax` matches). Interrogation covered cells `[1]`–`[4]` only
+(load/oracle-vs-params, `eval` vs `no_grad`, not-bitwise/argmax, fused QKV = packaging-not-math)
+before a long variance/Bessel detour off the `unbiased=False` LayerNorm flag pulled focus from the
+notebook's *overall purpose*. **Untouched:** attention `[5]`, MLP/full-forward `[6]`, the pin `[7]`.
+Resume by re-grounding on the one-sentence goal, then the parked question (why a 0.13% variance error
+breaks `atol=1e-4`). Per the method, a fluent pass is not evidence — the forward pass itself is still
+un-interrogated. See [`notebooks/02_transformer.md`](./notebooks/02_transformer.md),
+[`learning-records/0002`](./learning-records/0002-transformer-forward-pass.md).
 
 ### Circuits
 
