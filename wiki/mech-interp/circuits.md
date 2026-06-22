@@ -87,15 +87,22 @@ years until Hooke's *Micrographia* — the qualitative discovery of cells still 
 
 "Zoom In" studies a *vision* model (InceptionV1), but its vocabulary — features as directions,
 circuits, superposition, polysemanticity — became the foundation for the **transformer** circuits
-program (Anthropic's "A Mathematical Framework for Transformer Circuits," "In-Context Learning and
-Induction Heads," "Toy Models of Superposition," "Towards Monosemanticity"). Those papers are not
-yet ingested: their host (transformer-circuits.pub) is unreachable under the current GitHub-only
-network policy. The [tooling and curriculum](tooling-and-curriculum.md) page covers the practical
-stack (TransformerLens, ARENA) that operationalizes these ideas for transformers, including
-**induction heads** and **sparse autoencoders** for resolving superposition.
+program. Those papers (Anthropic's transformer-circuits.pub thread) are now ingested as their own
+articles: [A Mathematical Framework for Transformer Circuits](transformer-circuits-framework.md) and
+[Induction Heads and In-Context Learning](induction-heads-and-in-context-learning.md) port the
+features/circuits idea to attention, while [Superposition](superposition.md) and
+[Sparse Autoencoders & Monosemanticity](sparse-autoencoders.md) formalize and then resolve the
+superposition that makes neurons polysemantic. The
+[tooling and curriculum](tooling-and-curriculum.md) page covers the practical stack (TransformerLens,
+ARENA) that operationalizes these ideas in code.
 
 ## See Also
 
+- [A Mathematical Framework for Transformer Circuits](transformer-circuits-framework.md) and
+  [Induction Heads and In-Context Learning](induction-heads-and-in-context-learning.md) — this
+  program ported to transformers.
+- [Superposition: Toy Models](superposition.md) — superposition formalized, and
+  [Sparse Autoencoders & Monosemanticity](sparse-autoencoders.md) — resolving it into features.
 - [Mechanistic Interpretability Tooling & Curriculum](tooling-and-curriculum.md) — TransformerLens
   and ARENA, the hands-on stack for doing this on transformers.
 - [The Transformer Architecture](../llm-from-scratch/transformer-architecture.md) — the structure

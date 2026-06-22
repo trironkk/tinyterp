@@ -66,14 +66,22 @@ ARENA's flagship exercises directly operationalize the [circuits](circuits.md) i
 **induction heads** (a two-head circuit that copies repeated sequences — the canonical first
 transformer circuit), the **IOI circuit** (a worked real-model circuit), and **sparse autoencoders**
 (the leading approach to resolving **superposition** into monosemantic features). The conceptual
-Anthropic papers behind these (the transformer-circuits.pub thread) are not yet ingested due to the
-current GitHub-only network policy; TransformerLens and ARENA are the route to engaging with their
-results in code today.
+Anthropic papers behind these are now ingested — see
+[A Mathematical Framework for Transformer Circuits](transformer-circuits-framework.md) and
+[Induction Heads and In-Context Learning](induction-heads-and-in-context-learning.md) for the
+induction-head exercises, and [Superposition](superposition.md) and
+[Sparse Autoencoders & Monosemanticity](sparse-autoencoders.md) for the superposition/SAE exercises.
+TransformerLens and ARENA are the route to engaging with their results in code.
 
 ## See Also
 
 - [Mechanistic Interpretability: Features, Circuits, and Superposition](circuits.md) — the concepts
   these tools put into practice.
+- [A Mathematical Framework for Transformer Circuits](transformer-circuits-framework.md),
+  [Induction Heads and In-Context Learning](induction-heads-and-in-context-learning.md),
+  [Superposition](superposition.md), and
+  [Sparse Autoencoders & Monosemanticity](sparse-autoencoders.md) — the Anthropic papers behind
+  ARENA's interpretability exercises.
 - [nanoGPT & nanochat](../llm-from-scratch/nanogpt-and-nanochat.md) and
   [The Transformer Architecture](../llm-from-scratch/transformer-architecture.md) — building and
   understanding the models that TransformerLens then instruments.

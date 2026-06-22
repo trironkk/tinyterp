@@ -28,3 +28,21 @@
 - Toy Models of Superposition (transformer-circuits.pub)
 - Towards Monosemanticity (transformer-circuits.pub)
 - Neel Nanda — Mech Interp Explainer & Glossary + 200 Concrete Open Problems (neelnanda.io)
+
+## [2026-06-22] ingest | A Mathematical Framework for Transformer Circuits
+- New: transformer-circuits.pub now reachable (added to network allowlist)
+- Updated: Mechanistic Interpretability: Features, Circuits, and Superposition (lineage note + See Also)
+
+## [2026-06-22] ingest | Induction Heads and In-Context Learning
+- Updated: Mechanistic Interpretability Tooling & Curriculum (See Also + induction-head note)
+
+## [2026-06-22] ingest | Superposition: Toy Models
+
+## [2026-06-22] ingest | Sparse Autoencoders & Monosemanticity (Dictionary Learning)
+- Updated: Mechanistic Interpretability Tooling & Curriculum (SAE note + See Also)
+
+## [2026-06-22] ingest | Attention Is All You Need
+- arxiv.org now reachable (added to network allowlist); merged into The Transformer Architecture (now its primary source)
+
+## [2026-06-22] note | Still blocked after allowlist update
+- Neel Nanda — Mech Interp Explainer & Glossary + 200 Concrete Open Problems (neelnanda.io still returns 403; not fetchable)
