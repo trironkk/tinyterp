@@ -1,33 +1,17 @@
 # tinyterp
 
-This repository will hold my personal explorations of the mechanistic interpretability domain. I'll
-be re-implenenting concepts on a smaller scale to convince myself of my own understanding,
-minimizing the dependencies taken on the critical path of training and inference.
+A personal, project-based mechanistic interpretability project. TK builds interp concepts from
+the ground up to convince himself of his own understanding.
 
-## Environment Setup
+## Session arc
 
-<todo>
+Every session follows three steps:
 
-## Differentiation
+1. **Scope** — TK describes what he wants to build; we sharpen it with pointed questions until
+   it's specific enough to decompose.
+2. **Design** — Stub the notebook as labeled markdown cells paired with empty code cells; TK
+   reviews and adjusts the structure before any code is written.
+3. **Build** — One cell at a time, with a one-sentence narration and a pause for questions after
+   each.
 
-<todo>
-
-## Transformer
-
-<todo>
-
-## Sparse Autoencoders
-
-<todo>
-
-## Circuits
-
-<todo>
-
-## Evaluations
-
-<todo>
-
-## References
-
-<todo>
+See [CLAUDE.md](./CLAUDE.md) for Claude's operating manual.
