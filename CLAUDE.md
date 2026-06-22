@@ -14,7 +14,7 @@ user interrogates the work in flight.
 1. **Scope.** The user describes what they want to build. Run the **grill-me** skill
    (`.claude/skills/grill-me/`, symlinked from the vendored submodule) to sharpen it: ask **one
    pointed question at a time** until the goal is specific enough to decompose. Surface which
-   `kb/` pages are relevant.
+   `wiki/` pages are relevant.
    - A docs-grounding variant exists in the vendored submodule at
      `vendor/mattpocock-skills/skills/engineering/grill-with-docs/` — it isn't linked into
      `.claude/skills` (only `grill-me` and its `grilling` dependency are), but reach for it when
@@ -27,12 +27,20 @@ user interrogates the work in flight.
 
 ## Knowledge base
 
-`kb/` is the **primary source for all builds**. Before Design, check which pages apply. When a
-page doesn't exist for something needed, fall back to parametric memory, **flag it inline**, and
-log it in `kb/GAPS.md`.
+The KB is a **Karpathy-style LLM wiki**, managed by the **karpathy-llm-wiki** skill
+(`.claude/skills/karpathy-llm-wiki/`, symlinked from the vendored submodule at
+`vendor/karpathy-llm-wiki/`). Two layers at the repo root:
 
-The KB gather/compile/flag workflow lives at `.claude/skills/kb-workflow/` — **TODO: vendor
-skill** (not yet present).
+- `raw/` — immutable source material, organized by topic (`raw/<topic>/`). Read, never edit.
+- `wiki/` — compiled articles the skill owns (`wiki/<topic>/<article>.md`), plus `wiki/index.md`
+  (global index) and `wiki/log.md` (operation log).
+
+`wiki/` is the **primary source for all builds**. Before Design, check `wiki/index.md` for
+relevant articles. The skill drives three operations: **ingest** a source ("add to wiki"),
+**query** the wiki ("what do I know about …"), and **lint** for quality. When a needed concept
+has no page, fall back to parametric memory and **flag it inline**; surfacing such gaps
+("concepts frequently mentioned but lacking a dedicated page") is a lint heuristic, so an ingest
+or lint pass is how they get filled.
 
 ## Conventions
 

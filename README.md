@@ -14,4 +14,11 @@ Every session follows three steps:
 3. **Build** — One cell at a time, with a one-sentence narration and a pause for questions after
    each.
 
+## Knowledge base
+
+Builds are grounded in a Karpathy-style LLM wiki, managed by the
+[karpathy-llm-wiki](./vendor/karpathy-llm-wiki/) skill: raw sources land in `raw/`, and the skill
+compiles them into linked articles under `wiki/` (see `wiki/index.md`). Ingest a source, query
+what you know, or lint for gaps — the LLM writes the wiki, you read and ask questions.
+
 See [CLAUDE.md](./CLAUDE.md) for Claude's operating manual.
