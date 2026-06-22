@@ -11,14 +11,14 @@ user interrogates the work in flight.
 
 ## Session arc — three steps every session
 
-1. **Scope.** The user describes what they want to build. Run the **grill-me** skill
-   (`.claude/skills/grill-me/`, symlinked from the vendored submodule) to sharpen it: ask **one
+1. **Scope.** The user describes what they want to build. Run the **grilling** skill
+   (`.claude/skills/grilling/`, symlinked from the vendored submodule) to sharpen it: ask **one
    pointed question at a time** until the goal is specific enough to decompose. Surface which
    `kb/` pages are relevant.
    - A docs-grounding variant exists in the vendored submodule at
      `vendor/mattpocock-skills/skills/engineering/grill-with-docs/` — it isn't linked into
-     `.claude/skills` (only `grill-me` and its `grilling` dependency are), but reach for it when
-     the scoping needs to be anchored to documentation.
+     `.claude/skills` (only `grilling` is), but reach for it when the scoping needs to be
+     anchored to documentation.
 2. **Design.** Stub the notebook: labeled markdown cells (`## [A] Short description`) paired
    with empty code cells. Labels make cells referenceable ("split [C]", "merge [D] and [E]").
    The user reviews and adjusts the structure **before any code is written**.
