@@ -10,6 +10,6 @@ fi
 
 # Initialize/refresh git submodules to the commits pinned by this repo.
 # This populates vendor/mattpocock-skills (Matt Pocock's skills) at the
-# pinned commit; the grill-me / grilling skills are symlinked from there
+# pinned commit; the grilling skill is symlinked from there
 # into .claude/skills. Idempotent.
 git -C "$CLAUDE_PROJECT_DIR" submodule update --init --recursive

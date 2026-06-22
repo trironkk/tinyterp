@@ -17,8 +17,8 @@ user interrogates the work in flight.
    `kb/` pages are relevant.
    - A docs-grounding variant exists in the vendored submodule at
      `vendor/mattpocock-skills/skills/engineering/grill-with-docs/` — it isn't linked into
-     `.claude/skills` (only `grilling` and the `grill-me` wrapper that invokes it are), but reach
-     for it when the scoping needs to be anchored to documentation.
+     `.claude/skills` (only `grilling` is), but reach for it when the scoping needs to be
+     anchored to documentation.
 2. **Design.** Stub the notebook: labeled markdown cells (`## [A] Short description`) paired
    with empty code cells. Labels make cells referenceable ("split [C]", "merge [D] and [E]").
    The user reviews and adjusts the structure **before any code is written**.
