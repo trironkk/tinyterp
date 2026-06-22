@@ -13,3 +13,11 @@ fi
 # pinned commit; the grilling skill is symlinked from there
 # into .claude/skills. Idempotent.
 git -C "$CLAUDE_PROJECT_DIR" submodule update --init --recursive
+
+# Register the nbstripout git clean filter so notebook OUTPUTS are stripped
+# on every commit (the repo never source-controls generated cell outputs).
+# .gitattributes routes *.ipynb through filter=nbstripout; here we point that
+# filter at the tool via uvx so no full project sync is required. Idempotent.
+git -C "$CLAUDE_PROJECT_DIR" config filter.nbstripout.clean "uvx nbstripout"
+git -C "$CLAUDE_PROJECT_DIR" config filter.nbstripout.smudge cat
+git -C "$CLAUDE_PROJECT_DIR" config diff.ipynb.textconv "uvx nbstripout -t"

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# uv
+uv.lock
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated artifacts — never source-controlled.
+# Trained weights, tokenizers, and any run outputs land here.
+artifacts/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Hugging Face datasets / model caches and any downloaded data
+data/
+hf_cache/
+.cache/

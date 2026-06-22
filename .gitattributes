@@ -1,0 +1,6 @@
+# Strip notebook outputs on commit via nbstripout (clean filter).
+# The filter is registered automatically in the remote env by
+# .claude/hooks/session-start.sh. For local clones, run once:
+#   uv run nbstripout --install --attributes .gitattributes
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb
