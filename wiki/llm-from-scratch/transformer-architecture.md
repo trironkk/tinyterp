@@ -1,21 +1,17 @@
 # The Transformer Architecture
 
-> Sources: Jay Alammar, 2018-06-27; Harvard NLP (Rush et al.), 2018-04 / 2022-04
-> Raw: [The Illustrated Transformer](../../raw/llm-from-scratch/2018-06-27-illustrated-transformer.md); [The Annotated Transformer](../../raw/llm-from-scratch/2022-04-the-annotated-transformer.md)
+> Sources: Ashish Vaswani et al. (Google), 2017-06-12; Jay Alammar, 2018-06-27; Harvard NLP (Rush et al.), 2018-04 / 2022-04
+> Raw: [Attention Is All You Need](../../raw/llm-from-scratch/2017-06-12-attention-is-all-you-need.md); [The Illustrated Transformer](../../raw/llm-from-scratch/2018-06-27-illustrated-transformer.md); [The Annotated Transformer](../../raw/llm-from-scratch/2022-04-the-annotated-transformer.md)
 
 ## Overview
 
 The Transformer (Vaswani et al., "Attention Is All You Need," 2017) is the architecture underlying
 modern LLMs. It replaces recurrence and convolution with **attention**, which lets every position
 attend to every other position in parallel — the property that makes large-scale training practical.
-This article synthesizes two canonical explainers: Jay Alammar's **Illustrated Transformer** (visual
-intuition) and Harvard NLP's **Annotated Transformer** (a line-by-line PyTorch implementation with
-the paper's text interleaved). Both describe the original encoder-decoder model; GPT-style LLMs use
-the decoder half of this design.
-
-> The primary source, Vaswani et al. 2017 (arXiv:1706.03762), is not yet ingested as its own raw
-> file (the host is unreachable under the current GitHub-only network policy). The two explainers
-> here faithfully reproduce its content.
+This article synthesizes the **primary source** (Vaswani et al. 2017, arXiv:1706.03762) with two
+canonical explainers: Jay Alammar's **Illustrated Transformer** (visual intuition) and Harvard NLP's
+**Annotated Transformer** (a line-by-line PyTorch implementation with the paper's text interleaved).
+All describe the original encoder-decoder model; GPT-style LLMs use the decoder half of this design.
 
 ## Encoder-decoder structure
 
@@ -69,9 +65,25 @@ with the paper's warmup-then-decay learning-rate schedule, **label smoothing** r
 KL divergence), and a worked German→English translation example, plus notes on multi-GPU training,
 checkpoint averaging, and attention visualization.
 
+## Why self-attention, and results (from the primary source)
+
+Vaswani et al. justify attention with a per-layer comparison: **self-attention** costs `O(n²·d)` but
+needs only `O(1)` sequential operations and connects any two positions with a **maximum path length
+of `O(1)`** — versus recurrence (`O(n)` sequential ops, `O(n)` path length) and convolution
+(`O(log_k n)` path length). The short path and high parallelism are what make long-range dependencies
+learnable and training fast; self-attention is also cheaper than recurrence when `n < d`.
+
+The Transformer set new state of the art on **WMT 2014**: **28.4 BLEU** English→German and **41.8
+BLEU** English→French (big model, ~3.5 days on 8 P100 GPUs), beating prior models including
+ensembles, and generalized to English constituency parsing (91.3–92.7 F1). Training used **Adam**
+(β₁=0.9, β₂=0.98) with the **warmup-then-inverse-√-decay** schedule (warmup_steps=4000), residual
+**dropout** 0.1, and **label smoothing** 0.1.
+
 ## See Also
 
 - [microGPT](microgpt.md) and [nanoGPT & nanochat](nanogpt-and-nanochat.md) — from-scratch
   implementations of the (decoder-only) GPT variant of this architecture.
 - [Neural Networks: Zero to Hero](nn-zero-to-hero.md) — Karpathy's course builds this architecture
   by hand in the "Building GPT from Scratch" lecture.
+- [A Mathematical Framework for Transformer Circuits](../mech-interp/transformer-circuits-framework.md)
+  — reverse-engineers this architecture (residual stream, QK/OV circuits, attention heads).
