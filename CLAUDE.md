@@ -50,4 +50,29 @@ or lint pass is how they get filled.
 - For any notebook open in VS Code, use the notebook_* MCP tools (notebook_insert_cell,
   notebook_edit_cell, notebook_run_cell, notebook_list_cells, etc.) instead of the built-in
   NotebookEdit. NotebookEdit is disk-only, renders stale in the editor, and produces noisy
-  single-line-JSON diffs.
+  single-line-JSON diffs. See **Live notebook editing** below for the setup this depends on.
+
+## Live notebook editing (notebook MCP server)
+
+The `notebook_*` tools require the **`olavovieiradecarvalho.notebook-mcp-server` VS Code
+extension** — this is a hard dependency, not optional tooling. The extension *is* the MCP
+server: on activation it binds `127.0.0.1:49777` inside the VS Code extension host (in this
+WSL2 namespace), and it holds the live handle to the open editor, which is what makes edits
+render instantly.
+
+- **`.mcp.json`** (repo root) is *Claude Code's client config*, not VS Code's. It only tells
+  Claude Code where to dial (`http://127.0.0.1:49777/mcp`). VS Code does **not** read it.
+- **Lifecycle is tied to the VS Code window.** Reloading or closing VS Code tears down the
+  `:49777` listener; the `.mcp.json` entry stays but points at a dead endpoint and `notebook_*`
+  calls fail until the extension reactivates.
+- **Install is remote-side.** The extension must live in the WSL workspace/remote extension
+  host, not the UI host. On this box the plain `code` CLI is Windows interop, so install via the
+  remote-cli binary (`~/.vscode-server/bin/<commit>/bin/remote-cli/code`) with
+  `VSCODE_IPC_HOOK_CLI` set to a live `/run/user/$(id -u)/vscode-ipc-*.sock`. A correct install
+  reports `Extensions installed on WSL: Ubuntu`.
+- **Approval gate.** The project-scoped `notebook` server needs one-time approval in an
+  interactive `claude` session (`claude mcp list` shows "Pending approval" until then); the
+  tools are unusable before approval.
+
+If the extension is absent or its window is closed, fall back to NotebookEdit (disk-only) and
+flag that live rendering is unavailable.
