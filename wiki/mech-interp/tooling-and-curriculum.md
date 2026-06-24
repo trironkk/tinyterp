@@ -75,6 +75,9 @@ TransformerLens and ARENA are the route to engaging with their results in code.
 
 ## See Also
 
+- [200 Concrete Open Problems in Mechanistic Interpretability](open-problems.md) and
+  [Mechanistic Interpretability Glossary (Neel Nanda)](glossary.md) — Nanda's companion onramps: what
+  to work on, and the terminology to do it. This page is the practical stack those two point at.
 - [Mechanistic Interpretability: Features, Circuits, and Superposition](circuits.md) — the concepts
   these tools put into practice.
 - [A Mathematical Framework for Transformer Circuits](transformer-circuits-framework.md),
