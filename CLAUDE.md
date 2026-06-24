@@ -47,3 +47,7 @@ or lint pass is how they get filled.
 - `uv` for everything (`uv run …`); Python pinned to 3.12.
 - Notebooks are stripped on commit (`nbstripout`).
 - Keep code device-agnostic.
+- For any notebook open in VS Code, use the notebook_* MCP tools (notebook_insert_cell,
+  notebook_edit_cell, notebook_run_cell, notebook_list_cells, etc.) instead of the built-in
+  NotebookEdit. NotebookEdit is disk-only, renders stale in the editor, and produces noisy
+  single-line-JSON diffs.
