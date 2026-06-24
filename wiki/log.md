@@ -46,3 +46,10 @@
 
 ## [2026-06-22] note | Still blocked after allowlist update
 - Neel Nanda — Mech Interp Explainer & Glossary + 200 Concrete Open Problems (neelnanda.io still returns 403; not fetchable)
+
+## [2026-06-24] ingest | Mechanistic Interpretability Glossary (Neel Nanda)
+- neelnanda.io now reachable (added to network allowlist); previously-blocked source
+
+## [2026-06-24] ingest | 200 Concrete Open Problems in Mechanistic Interpretability
+- lesswrong.com now reachable (added to network allowlist); previously-blocked source
+- Updated: Mechanistic Interpretability Tooling & Curriculum (See Also → glossary + open-problems)
