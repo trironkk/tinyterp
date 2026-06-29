@@ -4,9 +4,6 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# uv
-uv.lock
-
 # Jupyter
 .ipynb_checkpoints/
 
