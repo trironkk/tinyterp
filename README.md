@@ -20,6 +20,28 @@ Every session follows three steps:
 |----------|-------------|
 | [01_microgpt-wiki](./notebooks/01_microgpt-wiki.ipynb) | Recreate Karpathy's microGPT, trained on Wikipedia (Simple English) with a from-scratch BPE tokenizer and a GPT-2-style Transformer built from raw PyTorch tensor ops. |
 
+## Future work
+
+A rough roadmap beyond the current notebook(s), in arc order — train, post-train, then
+interpret at increasing depth:
+
+- **Post-training reinforcement learning** — take a pretrained model through an RL post-training
+  stage (reward modeling / preference optimization) to study how behavior shifts from the base
+  model.
+- **Mechanistic interpretability probes** — the first interpretability pass on a trained model:
+  - *Attention pattern visualization* — render the per-head `(n_head, T, T)` maps; see which
+    heads do local vs long-range, positional vs content attention.
+  - *Induction heads* — search for the `[A][B]…[A]→[B]` copy circuit with repeated-token inputs;
+    the flagship finding on small Transformers.
+  - *Logit lens* — project the residual stream at each layer through the (tied) unembed to watch
+    the next-token prediction sharpen layer by layer.
+  - *Embedding structure* — nearest neighbors in the token embedding, and the geometry of the
+    learned position embeddings.
+- **Circuit tracing** — move from observing patterns to identifying end-to-end circuits: which
+  components compose to implement a specific behavior.
+- **Sparse autoencoders (SAEs)** — decompose activations into interpretable, monosemantic
+  features to get past the polysemanticity of raw neurons.
+
 ## Knowledge base
 
 Builds are grounded in a Karpathy-style LLM wiki, managed by the
