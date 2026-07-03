@@ -132,6 +132,13 @@ With the gap gone, the regularization toolkit below drops from *needed* to *opti
 the levers that now bind are **model capacity and step count** (the loss curve was still
 declining at 20k steps), i.e. the scaling-sweep backlog item.
 
+**Capacity lever pulled (first data point).** Scaling the model 4L/4H/128D → 8L/8H/320D
+(0.94M → 10.2M params; ~54 ms/step, 20k steps ≈ 22 min — sized so the full notebook runs in
+~30 min wall-clock) drops best val **2.609 → 2.104** (at step 17600; final train 2.111 /
+val 2.162). The train/val gap stays within eval noise (+0.01…+0.09) even at 10.2M params on
+~1 epoch, so regularization stays unneeded. Loss plateaued over the last ~2k steps as the lr
+decayed, so the next capacity/step doubling likely pays less — measure via the scaling sweep.
+
 Regularization toolkit (kept for reference; measure any of these against the [R] gap):
 
 - *Early stopping / best-val checkpoint* — track the val minimum during [Q] and have [U]
@@ -154,14 +161,8 @@ if a future config (bigger model, more steps, smaller corpus) reopens it.
 
 Small, well-scoped follow-ups. Each is tagged with the cell(s) it touches.
 
-- **Config hygiene ([P]→[B]).** Promote `warmup_steps` / `min_lr` from [P] up into [B] so [B]
-  stays the single source of truth for hyperparameters.
-- **Gradient clipping ([Q]).** Add global-norm gradient clipping to the [Q] step (clip before
-  `optimizer.step()`) — the standard stabilizer we left out; cheap insurance against loss spikes.
 - **Ablations ([K]–[O]).** Toggle weight tying (tied vs separate LM head), swap learned-absolute
   positions for RoPE, and compare pre-norm vs post-norm — measure the loss impact of each.
-- **Better sampling ([S]/[T]).** Add top-p / nucleus sampling and a repetition penalty to
-  `generate`, and compare output quality against the current top-k.
 - **KV cache ([L]/[T]).** Generation re-runs the full context every token; cache per-layer keys
   and values so each new token is O(1) work instead of O(T). Good systems exercise.
 - **Scaling sweep ([B]).** Plot final loss vs `n_articles` and vs model size (`n_layer` /
@@ -193,6 +194,14 @@ Small, well-scoped follow-ups. Each is tagged with the cell(s) it touches.
 
 Resolved:
 
+- ~~Config hygiene ([P]→[B])~~ — `warmup_steps` / `min_lr` promoted into [B] (plus the new
+  `grad_clip`); [B] is the single source of truth for hyperparameters again.
+- ~~Gradient clipping ([Q])~~ — from-scratch global-norm `clip_grad_norm` (same raw-tensor
+  spirit as the hand-rolled Adam), applied between `backward()` and `optimizer.step()`.
+- ~~Better sampling ([S]/[T])~~ — `generate()` gained `top_p` (nucleus) and
+  `repetition_penalty` (GPT-2/CTRL style) knobs; [T] compares them against top-k on the same
+  prompts. Observed: top_k=50 falls into verbatim loops ("*He was married to Ferdinand… He
+  divorced in 1976*" twice in one sample), which top_p 0.9 + penalty 1.3 breaks.
 - ~~pure-Python global BPE too slow / cross-word artifacts~~ — replaced by regex
   pre-tokenization + incremental within-chunk training ([E]/[F]); see *Tokenizer — final design*.
 - ~~`import json` unused~~ — removed from [A] (the old `.jsonl` caches are gone; nothing else
