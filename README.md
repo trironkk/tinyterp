@@ -1,33 +1,57 @@
 # tinyterp
 
-This repository will hold my personal explorations of the mechanistic interpretability domain. I'll
-be re-implenenting concepts on a smaller scale to convince myself of my own understanding,
-minimizing the dependencies taken on the critical path of training and inference.
+A personal repository for project-based mechanistic interpretability exploration.
 
-## Environment Setup
+## Layout
 
-<todo>
+| Path | Purpose |
+|------|---------|
+| `notebooks/` | Experiments and exploration notebooks. |
+| `tinyterp/` | The package. Settled code graduates here from notebooks. |
+| `artifacts/` | Gitignored. Checkpoints, tokenizers, plots. Notebooks load from here rather than retraining. |
+| `data/` | Gitignored. Downloaded datasets and caches. |
 
-## Differentiation
+## Curriculum
 
-<todo>
+Engineering
+[ ] Dependency management
+[ ] Hardware detection
+[ ] Training data acquisition
 
-## Transformer
+Fundamentals & Theory
+[ ] Matrix multiplication
+[ ] Softmax
+[ ] Tokenization
+[ ] Cross-entropy
+[ ] Backpropagation
+[ ] Optimization (SGD → Adam)
 
-<todo>
+Transformer
+[ ] Attention
+[ ] Network architecture
+[ ] Training
+[ ] Evaluation
+[ ] Sampling
 
-## Sparse Autoencoders
+Post-training
+[ ] Reward model
+[ ] Preference optimization
 
-<todo>
+Interpretability
+[ ] Probe attention patterns
+[ ] Probe induction heads
+[ ] Probe embeddings
+[ ] Probe logits
+[ ] Circuits
+    [ ] Activation patching
+    [ ] Circuit tracing
+[ ] Superposition toy model
+[ ] Sparse Autoencoders
+    [ ] Training
+    [ ] Feature interpretation
 
-## Circuits
+## Resources
 
-<todo>
-
-## Evaluations
-
-<todo>
-
-## References
-
-<todo>
+* https://karpathy.ai/zero-to-hero.html
+* https://www.3blue1brown.com/?topic=neural-networks
+* https://colah.github.io/

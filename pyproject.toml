@@ -1,0 +1,16 @@
+[project]
+name = "tinyterp"
+version = "0.2.0"
+description = "Personal, project-based mechanistic interpretability workspace."
+requires-python = "==3.12.*"
+dependencies = [
+    "torch",
+    "datasets",
+    "regex>=2026.6.28",
+    "matplotlib",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel",
+]
