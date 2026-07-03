@@ -69,9 +69,9 @@ Structure:
   tensor (~2 bytes/token; [I]'s `get_batch` casts each batch to `long`). Full-corpus roundtrip
   assert, then 90/10 split.
 
-Measured (validated at 3k and 6k articles): ~2.3 bytes/token at vocab 1024, BPE train ~1s,
-tokenize ~1s for 3M tokens. Extrapolates to ~90M tokens in ~tens of seconds at `n_articles`
-180k.
+Measured at full scale (`n_articles` 180k): BPE train **19.2s** over 861,118 unique chunks;
+tokenize **86.3M tokens in 28.6s** at 2.31 bytes/token (vocab 1024); full-corpus roundtrip
+assert passes.
 
 ## Lesson: the sample is biased, and byte-level BPE amplified it (the `", American"` story)
 
@@ -115,21 +115,24 @@ The blocker was the old pure-Python *global* BPE: O(`num_merges` × `len`), ~127
   exact `\p{L}`/`\p{N}` pattern is gap-free, and [H] now asserts the full-corpus roundtrip.
 - **Incremental pair counts** ([F], minbpe-style) close the leftover training-perf gap.
 
-### Overfitting ([Q]/[R])
+### Overfitting ([Q]/[R]) — RESOLVED by corpus scale
 
 First run showed val cross-entropy *rising* while train kept falling — classic overfitting,
 expected then: a tiny corpus (~2000 articles), a 4L/128D model with capacity to memorize,
 multiple effective passes, and zero regularization.
 
-**Root cause was corpus size**, and the primary data-side lever — scaling `n_articles` toward
-~1 epoch — is now **pulled** (see *Scale the corpus* above; `n_articles` = 180k, ~1 pass instead
-of ~90). Re-measure the [R] train/val gap on the scaled run before adding more; the items below
-are *complementary regularization* levers, each measured against that gap.
+**Root cause was corpus size, confirmed.** The scaled run (180k articles, 82M tokens seen vs
+77.7M train tokens ≈ 1.06 passes; 20k steps in ~4 min on CUDA) shows **val decreasing
+monotonically to the very end**: best val **2.609 at step 19999** (the final step), train there
+2.673. The train/val gap over the last several evals bounces between −0.06 and +0.07 — pure
+`eval_iters=50` sampling noise around zero. (2.609 nats/token ≈ perplexity 13.6 ≈ 1.63
+bits/byte at 2.31 bytes/token.)
 
-First, **confirm it's real vs `eval_iters=50` sampling noise** — check several eval points, maybe
-raise `eval_iters`.
+With the gap gone, the regularization toolkit below drops from *needed* to *optional hygiene* —
+the levers that now bind are **model capacity and step count** (the loss curve was still
+declining at 20k steps), i.e. the scaling-sweep backlog item.
 
-Regularization toolkit:
+Regularization toolkit (kept for reference; measure any of these against the [R] gap):
 
 - *Early stopping / best-val checkpoint* — track the val minimum during [Q] and have [U]
   save **those** weights, not the final (most-overfit) step. Cheapest, do first.
@@ -144,8 +147,8 @@ Regularization toolkit:
 - *Data augmentation* — vary `data_seed` / reshuffle article order between runs so the model
   never sees the exact same stream (and the val tail isn't a fixed set of articles).
 
-The high-value trio is **more data (done) + early stopping + weight decay**; dropout/label-
-smoothing are the next layer if the gap persists.
+More data alone closed the gap; early stopping / weight decay / dropout only become relevant
+if a future config (bigger model, more steps, smaller corpus) reopens it.
 
 ## Backlog / chores
 
