@@ -9,11 +9,12 @@ are tagged with the cell(s) they touch.
 
 | | | | |
 |---|---|---|---|
-| [A] Setup & dependencies | [F] Encode / decode | [K] Multi-head causal self-attn | [P] Training loop |
-| [B] Config | [G] Tokenize the corpus | [L] MLP block | [Q] Loss curves |
-| [C] Load Wikipedia | [H] Batching | [M] Transformer block | [R] Sampling |
-| [D] Inspect the corpus | [I] Embeddings | [N] GPT model | [S] Generate |
-| [E] Train a minimal BPE | [J] RMSNorm | [O] Optimizer & LR schedule | [T] Save / load |
+| [A] Setup & dependencies | [G] Encode / decode | [M] MLP block | [S] Sampling |
+| [B] Config | [H] Tokenize the corpus | [N] Transformer block | [T] Generate |
+| [C] Load Wikipedia | [I] Batching | [O] GPT model | [U] Save / load |
+| [D] Inspect the corpus | [J] Embeddings | [P] Optimizer & LR schedule | |
+| [E] Pre-tokenization pattern | [K] RMSNorm | [Q] Training loop | |
+| [F] Train a minimal BPE | [L] Multi-head causal self-attn | [R] Loss curves | |
 
 ## Data loading — final design [C]
 
@@ -33,83 +34,104 @@ Config [B]: `n_articles`, `data_seed`. The download + parquet load stay cached, 
 iterating on sampling (change `data_seed`/`n_articles` or the selection rule) is instant
 and draws a genuinely global uniform sample.
 
-## Lesson: the sample is biased, and BPE amplifies it (the `", American"` story)
+## Tokenizer — final design [E]/[F]/[G]/[H]
 
-BPE [E] had learned a token for `", American"`. Two findings, worth remembering:
+GPT-2-style **regex pre-tokenization** (`regex` module, `\p{L}`/`\p{N}` classes) splits text
+into word / number / punctuation chunks; BPE only ever merges a pair **within** a chunk. This
+buys three things at once:
+
+1. **Correctness.** The alternation is gap-free, so `pretokenize` partitions text with no
+   dropped characters. [H] asserts a **full-corpus roundtrip** (`decode(tokenize(corpus)) ==
+   corpus`) as the gate — the property the earlier byte-level `re`-translation silently lacked
+   (see *Rejected approaches*).
+2. **No cross-word artifacts.** Merges can't cross a space, so the `", American"` list-page
+   token (below) is now structurally impossible.
+3. **Speed, via caching.** Encoding is memoized per unique pre-token chunk (`_chunk_cache`), so
+   tokenizing the whole corpus pays each unique chunk's merge cost once (~tens of thousands of
+   uniques) instead of once per token (~tens of millions).
+
+Structure:
+
+- **[E] Pre-tokenization pattern** — the `GPT2_PAT` regex + `pretokenize()` + the shared
+  low-level `get_stats`/`merge` primitives, with a gap-free assert on a demo string.
+- **[F] Train a minimal BPE** — trains `vocab_size - 256` merges over the **whole corpus**.
+  Dedup to unique chunks first (they grow *sublinearly* — ~0.9M uniques for 180k articles, only
+  ~18× the 2k count), then **incremental** pair-count maintenance (minbpe-style): after each
+  merge only the chunks that contained the merged pair are re-scanned. Full-corpus training is
+  ~35s at 180k (measured: pretok ~15s + train ~20s over 861k unique chunks) — cheap enough that
+  there's no need to train on a small slice, so the vocab's frequency tail stays representative.
+- **[G] Encode / decode** — greedy merge-by-rank within each chunk (`encode_chunk`, cached),
+  `decode` via the id→bytes table. Greedy-by-rank is the standard BPE encode (GPT-2/minbpe); it
+  need not reproduce [F]'s exact training segmentation, but decode inverts it losslessly either
+  way.
+- **[H] Tokenize the corpus** — stream pre-tokens with `re.finditer` (lazy, no giant
+  intermediate list) through the [G] cache into a compact `uint16` `array` → `torch.frombuffer`
+  tensor (~2 bytes/token; [I]'s `get_batch` casts each batch to `long`). Full-corpus roundtrip
+  assert, then 90/10 split.
+
+Measured (validated at 3k and 6k articles): ~2.3 bytes/token at vocab 1024, BPE train ~1s,
+tokenize ~1s for 3M tokens. Extrapolates to ~90M tokens in ~tens of seconds at `n_articles`
+180k.
+
+## Lesson: the sample is biased, and byte-level BPE amplified it (the `", American"` story)
+
+The old byte-level BPE (no pre-tokenization) had learned a token for `", American"`. Two
+findings, worth remembering even though the regex split has since made the artifact impossible:
 
 1. **The raw dataset is ~alphabetical by title.** Taking the first N articles gives an
    A-heavy, topically skewed slice (April, August, Art, A, Air, Alan Turing…). Year/date
-   pages (1991, 2006…) and "Events" lists also cluster near the front.
-2. **BPE merges on *global frequency*, so a few list pages dominate.** `", American"` hit
-   2,576 times but in only 90/2000 articles (~29 each), concentrated in birth/death list
-   pages ("*June 3 – Name, American actor*"). Dense repetition in a handful of structured
-   docs is enough to earn a merge — it's a **list-page artifact**, not broad usage.
+   pages (1991, 2006…) and "Events" lists also cluster near the front. (Fixed by the uniform
+   sample in [C].)
+2. **Byte-level BPE merged on *global frequency*, so a few list pages dominated.** `", American"`
+   hit 2,576 times but in only 90/2000 articles (~29 each), concentrated in birth/death list
+   pages ("*June 3 – Name, American actor*"). Dense repetition in a handful of structured docs
+   was enough to earn a merge — a **list-page artifact**, not broad usage.
 
-Takeaway: a representative *uniform* sample (current design) is what keeps these artifacts
-out of the long-token tail. Some biography phrasing may still appear (Wikipedia is
-biography-heavy) but no longer dominates. Truly taming list pages would need document-level
-dedup/normalization — not done.
+Takeaway: the uniform sample keeps such artifacts out of the long-token tail, and regex
+pre-tokenization ([E]) removes the *cross-word* class of them entirely (a merge can no longer
+span the `", "` → `"American"` boundary). Truly taming list pages would still need
+document-level dedup/normalization — not done.
 
 ## Research directions
 
-The two large, measured threads. Everything smaller lives in **Backlog** below.
+### Scale the corpus to ~1 epoch — DONE (tokenizer reworked, `n_articles` = 180k) ([B]/[F]/[H])
 
-### Scale the corpus to ~1 epoch — needs a faster tokenizer ([B]/[E]/[G])
+**Status: implemented and merged.** The old build did 20000 steps × 32 × 128 = **82M tokens
+seen** over only ~0.9M tokens of corpus (2000 articles) → **~90 passes**, the root-cause,
+data-side driver of the overfitting below. Measured ~2.3 bytes/token, so **~1 epoch ≈ 180k
+articles** (~88M tokens; the `20231101.simple` dump has 241,787). `n_articles` is now 180000.
 
-**Status: prototyped, deliberately NOT merged** — kept the simple overfitting build.
+The blocker was the old pure-Python *global* BPE: O(`num_merges` × `len`), ~127s to train and
+~57s to tokenize just 2000 articles. Resolved by the tokenizer rework above:
 
-The step count and corpus are badly mismatched: 20000 steps × 32 × 128 = **82M tokens seen**,
-but 2000 articles ≈ 0.9M tokens, so training makes **~90 passes** over the data — the overfit
-engine (see **Overfitting** below; this is the root-cause, data-side lever). Measured
-~450–490 tokens/article (2.54 bytes/token at vocab 1024), so **~1 epoch needs ~180k articles**
-(~88M tokens; the `20231101.simple` dump has 241,787).
+- **Full-corpus BPE stays cheap** ([F]): dedup to unique chunks + incremental counts make
+  training ~35s at 180k, so we train on the whole corpus and the vocab's frequency tail has no
+  small-sample bias. The originally-planned decouple-onto-a-fixed-slice turned out unnecessary —
+  **dedup, not slicing, is what kills the old O(`num_merges` × `len`) blocker** (unique chunks
+  grow sublinearly, so the merge loop is bounded regardless of `n_articles`).
+- **GPT-2 regex pre-tokenization** ([E]) makes encoding cacheable per unique chunk ([G]/[H]).
+- **The correctness blocker is closed.** The earlier stdlib-`re` translation dropped characters
+  (`decode(tokenize(corpus)) == corpus` → False); using the **`regex` module** with GPT-2's
+  exact `\p{L}`/`\p{N}` pattern is gap-free, and [H] now asserts the full-corpus roundtrip.
+- **Incremental pair counts** ([F], minbpe-style) close the leftover training-perf gap.
 
-Blocker: [E]/[G]'s pure-Python *global* BPE is O(`num_merges` × `len`) — measured **127s to
-train and 57s to tokenize just 2000 articles**, i.e. ~hours at 180k, and `list(corpus.encode())`
-at 180k is ~1.7GB of Python ints.
-
-Validated fix (scratch prototype tokenized 180k in ~25s):
-
-- **Decouple BPE training** onto a small fixed slice (add `bpe_train_articles`, e.g. 2000) —
-  the vocab stabilizes long before the full corpus, so [E] stays cheap and independent of
-  `n_articles`. Only [G]'s tokenization then scales.
-- Adopt **GPT-2 regex pre-tokenization** (option (b)): split into word / number / punctuation
-  pre-tokens and merge only *within* a chunk. Makes the vocab word-bounded (also kills the
-  cross-word `", American"` artifact) and — the actual point — makes encoding **cacheable per
-  unique chunk**, so [G] pays the merge loop once per unique pre-token (~100k) instead of per
-  token (~88M).
-- Tokenize by streaming pre-tokens (`re.finditer`, lazy — no giant intermediate list over the
-  ~210MB corpus) through the cache into a `uint16` `array` → `torch.frombuffer` tensor (~88M
-  tokens ≈ 176MB).
-- **GOTCHA to fix before trusting it:** the stdlib-`re` translation of GPT-2's pattern did
-  *not* partition the corpus gap-free — `decode(tokenize(corpus)) == corpus` came back
-  **False**, i.e. some characters are silently dropped (the per-article demo roundtrips fine,
-  so it's an edge char class the alternation misses). Before adopting: find the gap and assert
-  a full-corpus roundtrip, or pull in the `regex` module and use GPT-2's exact `\p{L}`/`\p{N}`
-  pattern (known gap-free). Silent dropping = corrupted training data, so this is the blocker,
-  not the speed.
-- Leftover perf once correct: (c) incremental pair-count maintenance to speed **[E] training**
-  (still ~250s on the 2k slice with regex, since it rescans every chunk per merge — only
-  re-touch chunks containing the merged pair, minbpe-style); (d) confirm greedy `encode()`
-  matches the training-time merge order on held-out text.
-
-### Overfitting ([P]/[Q])
+### Overfitting ([Q]/[R])
 
 First run showed val cross-entropy *rising* while train kept falling — classic overfitting,
-expected here: a tiny corpus (~2000 articles), a 4L/128D model with capacity to memorize,
+expected then: a tiny corpus (~2000 articles), a 4L/128D model with capacity to memorize,
 multiple effective passes, and zero regularization.
 
-**Root cause is corpus size.** The data-side fix — scale `n_articles` toward ~1 epoch instead
-of the current ~90 re-passes — is the primary lever, and it's the **Scale the corpus** research
-direction above. The items below are *complementary regularization* levers; measure each against
-the [Q] train/val gap.
+**Root cause was corpus size**, and the primary data-side lever — scaling `n_articles` toward
+~1 epoch — is now **pulled** (see *Scale the corpus* above; `n_articles` = 180k, ~1 pass instead
+of ~90). Re-measure the [R] train/val gap on the scaled run before adding more; the items below
+are *complementary regularization* levers, each measured against that gap.
 
 First, **confirm it's real vs `eval_iters=50` sampling noise** — check several eval points, maybe
 raise `eval_iters`.
 
 Regularization toolkit:
 
-- *Early stopping / best-val checkpoint* — track the val minimum during [P] and have [T]
+- *Early stopping / best-val checkpoint* — track the val minimum during [Q] and have [U]
   save **those** weights, not the final (most-overfit) step. Cheapest, do first.
 - *Weight decay* — decoupled AdamW-style decay on the matmul weights (skip norms/embeddings);
   the standard "shrink unused capacity" regularizer.
@@ -122,25 +144,28 @@ Regularization toolkit:
 - *Data augmentation* — vary `data_seed` / reshuffle article order between runs so the model
   never sees the exact same stream (and the val tail isn't a fixed set of articles).
 
-The high-value trio is **more data + early stopping + weight decay**; dropout/label-smoothing
-are the next layer if the gap persists.
+The high-value trio is **more data (done) + early stopping + weight decay**; dropout/label-
+smoothing are the next layer if the gap persists.
 
 ## Backlog / chores
 
 Small, well-scoped follow-ups. Each is tagged with the cell(s) it touches.
 
-- **Config hygiene ([O]→[B]).** Promote `warmup_steps` / `min_lr` from [O] up into [B] so [B]
+- **Config hygiene ([P]→[B]).** Promote `warmup_steps` / `min_lr` from [P] up into [B] so [B]
   stays the single source of truth for hyperparameters.
-- **Gradient clipping ([P]).** Add global-norm gradient clipping to the [P] step (clip before
+- **Gradient clipping ([Q]).** Add global-norm gradient clipping to the [Q] step (clip before
   `optimizer.step()`) — the standard stabilizer we left out; cheap insurance against loss spikes.
-- **Ablations ([J]–[N]).** Toggle weight tying (tied vs separate LM head), swap learned-absolute
+- **Ablations ([K]–[O]).** Toggle weight tying (tied vs separate LM head), swap learned-absolute
   positions for RoPE, and compare pre-norm vs post-norm — measure the loss impact of each.
-- **Better sampling ([R]/[S]).** Add top-p / nucleus sampling and a repetition penalty to
+- **Better sampling ([S]/[T]).** Add top-p / nucleus sampling and a repetition penalty to
   `generate`, and compare output quality against the current top-k.
-- **KV cache ([K]/[S]).** Generation re-runs the full context every token; cache per-layer keys
+- **KV cache ([L]/[T]).** Generation re-runs the full context every token; cache per-layer keys
   and values so each new token is O(1) work instead of O(T). Good systems exercise.
 - **Scaling sweep ([B]).** Plot final loss vs `n_articles` and vs model size (`n_layer` /
   `n_embd`) — a mini "scaling laws" curve for this setup.
+- **Wiki gap: BPE/tokenization page.** The KB has no dedicated article on byte-pair encoding or
+  GPT-2 pre-tokenization (only microGPT/nanoGPT/transformer pages). Worth an `ingest`/`lint`
+  pass — this build worked from parametric memory for the regex pattern.
 
 ## Rejected approaches (don't retry)
 
@@ -151,16 +176,24 @@ Small, well-scoped follow-ups. Each is tagged with the cell(s) it touches.
 - **Non-streaming `load_dataset(split="train")`** — *hangs* in this WSL2 env; stalls in
   `datasets` data-files resolution on this giant multi-config parquet repo (only `README.md`
   ever fetched). `snapshot_download` of just the simple-config parquet sidesteps it.
+- **Byte-level BPE with no pre-tokenization** — merged across word boundaries (the `", American"`
+  artifact) and was O(`num_merges` × `len`), too slow to scale. Replaced by regex
+  pre-tokenization + incremental training ([E]/[F]).
+- **stdlib `re` translation of GPT-2's pattern** — not gap-free: silently dropped an edge char
+  class, so `decode(tokenize(corpus)) == corpus` was False. Use the `regex` module with the
+  exact `\p{L}`/`\p{N}` pattern instead.
 
 ## Known code smells / housekeeping
 
-- `import math` is imported in [A] but unused until [K]/[L]/[N]/[O]/[Q] (kept under the
+- `import math` is imported in [A] but unused until [L]/[M]/[O]/[P]/[R] (kept under the
   "all imports in [A]" convention).
 
 Resolved:
 
+- ~~pure-Python global BPE too slow / cross-word artifacts~~ — replaced by regex
+  pre-tokenization + incremental within-chunk training ([E]/[F]); see *Tokenizer — final design*.
 - ~~`import json` unused~~ — removed from [A] (the old `.jsonl` caches are gone; nothing else
   referenced it).
-- ~~`ids` reused across [E]/[F]~~ — [E]'s module-level corpus stream is now `stream` and [F]'s
-  demo is now `demo_ids`, so the two no longer collide. The `ids` *parameters* inside
-  `get_stats`/`merge`/`encode`/`decode` are unchanged (minbpe-style, intentional).
+- ~~`ids` reused across [E]/[F]~~ — resolved in the tokenizer rework; the low-level
+  `get_stats`/`merge`/`encode_chunk`/`decode` `ids` parameters are unchanged (minbpe-style,
+  intentional).
