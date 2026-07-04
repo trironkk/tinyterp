@@ -49,15 +49,3 @@ Get the `<comment_id>`s from `GET …/pulls/<pr>/comments`.
 Before any review exists: amend for a clean single commit. Once the PR has been reviewed:
 add a **follow-up** commit instead, so the review comments stay anchored to their lines and the
 reviewer sees exactly what changed in response.
-
-## Reset the workspace after a merge
-
-Once the PR merges, its branch is dead weight — get the workspace back onto an up-to-date base so
-the next task branches from the merged state, not a stale one.
-
-- Switch off the merged branch and update the base: `git checkout <base>` (usually `main`), then
-  `git fetch origin` and `git merge --ff-only origin/<base>`. Fast-forward only — a real merge here
-  means the local base has drifted, which is worth surfacing rather than papering over.
-- Optionally delete the merged local branch (`git branch -d <branch>` — the safe `-d` refuses if it
-  isn't fully merged).
-- A dirty working tree blocks the checkout; stop and flag it rather than stashing blindly.
