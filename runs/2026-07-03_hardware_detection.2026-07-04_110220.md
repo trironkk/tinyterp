@@ -74,26 +74,17 @@ torch.backends.cuda.matmul.allow_tf32=False
 The `override` flag exists for benchmarking: comparing backends requires
 pinning each side explicitly ([F] uses it for the CPU baseline).
 
-TODO: graduate to `tinyterp/device.py`.
-
 ```python
-def get_device(override: str | None = None) -> torch.device:
-    """Best available backend (cuda > cpu), or exactly `override`."""
-    if override is not None:
-        return torch.device(override)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
+import tinyterp
 
-
-device = get_device()
+device = tinyterp.get_device()
 print(f"{device=}")
-print(f"{get_device('cpu')=}")
+print(f"{tinyterp.get_device('cpu')=}")
 ```
 
 ```
 device=device(type='cuda')
-get_device('cpu')=device(type='cpu')
+tinyterp.get_device('cpu')=device(type='cpu')
 ```
 
 **[E] Correctness & precision test.** Verifies the selected device computes
@@ -197,7 +188,7 @@ def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
 
 sizes = [256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192]
 backends = ["cpu"] if device.type == "cpu" else ["cpu", device.type]
-results = {be: [matmul_tflops(get_device(be), n) for n in sizes] for be in backends}
+results = {be: [matmul_tflops(tinyterp.get_device(be), n) for n in sizes] for be in backends}
 
 for be in backends:
     means = [sum(s) / len(s) for s in results[be]]
@@ -218,8 +209,12 @@ plt.show()
 ```
 
 ```
- cpu: n=256:   0.610  n=384:   0.948  n=512:   0.979  n=768:   1.043  n=1024:   0.760  n=1536:   0.752  n=2048:   0.768  n=3072:   0.748  n=4096:   0.793  n=6144:   0.819  n=8192:   0.836
-cuda: n=256:   0.541  n=384:   1.628  n=512:   3.511  n=768:   7.148  n=1024:   9.139  n=1536:  12.919  n=2048:  13.541  n=3072:  14.933  n=4096:  15.686  n=6144:  15.403  n=8192:  17.460
+ cpu: n=256:   0.556  n=384:   0.557  n=512:   0.935  n=768:   1.038  n=1024:   0.628  n=1536:   0.661  n=2048:   0.772  n=3072:   0.732  n=4096:   0.749  n=6144:   0.815  n=8192:   0.822
+cuda: n=256:   0.764  n=384:   2.237  n=512:   3.879  n=768:   8.396  n=1024:   9.536  n=1536:  14.048  n=2048:   1.924  n=3072:  15.738  n=4096:  16.733  n=6144:  15.678  n=8192:  17.843
 ```
 
-![png](2026-07-03_hardware_detection.2026-07-04_093535_files/2026-07-03_hardware_detection.2026-07-04_093535_10_1.png)
+![png](2026-07-03_hardware_detection.2026-07-04_110220_files/2026-07-03_hardware_detection.2026-07-04_110220_10_1.png)
+
+## Changelog
+
+- Graduated `get_device()` to `tinyterp/device.py`.

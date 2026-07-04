@@ -49,22 +49,13 @@ if torch.cuda.is_available():
 # **[D] `get_device()`.** Selects the best available backend (cuda, else cpu).
 # The `override` flag exists for benchmarking: comparing backends requires
 # pinning each side explicitly ([F] uses it for the CPU baseline).
-#
-# TODO: graduate to `tinyterp/device.py`.
 
 # %% [D] get_device(): device-agnostic selection helper
-def get_device(override: str | None = None) -> torch.device:
-    """Best available backend (cuda > cpu), or exactly `override`."""
-    if override is not None:
-        return torch.device(override)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
+import tinyterp
 
-
-device = get_device()
+device = tinyterp.get_device()
 print(f"{device=}")
-print(f"{get_device('cpu')=}")
+print(f"{tinyterp.get_device('cpu')=}")
 
 # %% [markdown]
 # **[E] Correctness & precision test.** Verifies the selected device computes
@@ -162,7 +153,7 @@ def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
 
 sizes = [256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192]
 backends = ["cpu"] if device.type == "cpu" else ["cpu", device.type]
-results = {be: [matmul_tflops(get_device(be), n) for n in sizes] for be in backends}
+results = {be: [matmul_tflops(tinyterp.get_device(be), n) for n in sizes] for be in backends}
 
 for be in backends:
     means = [sum(s) / len(s) for s in results[be]]
@@ -180,3 +171,8 @@ ax.set_xticks(sizes, labels=[str(n) for n in sizes], rotation=45, minor=False)
 ax.xaxis.set_minor_locator(plt.NullLocator())  # default log ticks would clutter
 ax.legend()
 plt.show()
+
+# %% [markdown]
+# ## Changelog
+#
+# - Graduated `get_device()` to `tinyterp/device.py`.
