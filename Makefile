@@ -7,7 +7,7 @@
 record:
 	uv run jupytext --to ipynb --output - $(NB) | \
 	  uv run jupyter nbconvert --stdin --execute --to markdown \
-	    --output-dir runs --output "$(notdir $(basename $(NB))).$$(date +%F)"
+	    --output-dir runs --output "$(notdir $(basename $(NB))).$$(date +%F_%H%M%S)"
 	uv run --only-group lint mdformat runs/
 
 # Verify run records match notebook sources, and markdown is formatted

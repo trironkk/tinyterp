@@ -104,12 +104,12 @@ five trials, measured in fp32 and again with TF32 forced on, to establish
 the pass threshold empirically rather than assume one.
 
 Results (RTX 5060 Ti): fp32 accumulation-order noise ~3e-5, consistent with
-the estimate √K·ε·|element| ≈ 16·1.2e-7·16 for K=256; TF32 error (~10-bit
+the estimate sqrt(K)*eps*|element| ~ 16*1.2e-7*16 for K=256; TF32 error (~10-bit
 mantissa) ~3e-2. The fp32 imprecision arises because floating-point
 addition is not associative: every partial sum rounds to the nearest
 representable value, so the blocked/parallel reduction order cuBLAS uses
 accumulates different rounding errors than CPU BLAS, growing roughly with
-√K for random data. To learn more: Goldberg, "What Every Computer Scientist
+sqrt(K) for random data. To learn more: Goldberg, "What Every Computer Scientist
 Should Know About Floating-Point Arithmetic"
 (https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html), and
 NVIDIA, "Floating Point and IEEE 754"
@@ -150,7 +150,7 @@ tf32_diff=2.40e-02
 matmul on cuda matches CPU within fp32 tolerance (1e-4)
 ```
 
-**[F] Matmul throughput benchmark.** An n×n matmul costs 2n³ FLOPs; timing
+**[F] Matmul throughput benchmark.** An n-by-n matmul costs 2n^3 FLOPs; timing
 across sizes yields TFLOP/s per backend.
 
 Protocol: a warmup matmul absorbs one-time JIT and allocation costs;
@@ -158,11 +158,11 @@ Protocol: a warmup matmul absorbs one-time JIT and allocation costs;
 an unsynchronized clock times the launch rather than the work); tensors are
 created on-device so compute is measured, not PCIe transfer. All samples are
 plotted (small dots) with the per-size mean (large point). Min/max error
-bars were evaluated and rejected: a size's reps run back-to-back in a ~1–2 s
+bars were evaluated and rejected: a size's reps run back-to-back in a ~1-2 s
 window and share the prevailing GPU state, so per-size spread reflects
 short-term jitter only, not run-to-run variance.
 
-Note: Observed a recurring ~3× throughput dip at n=2048 in some runs,
+Note: Observed a recurring ~3x throughput dip at n=2048 in some runs,
 absent in others. Not a size effect: the sweep's timing is deterministic, so
 a periodic external GPU load (the WDDM scheduler time-slices this GPU
 between CUDA and the Windows desktop under WSL2; VS Code renders through it)
@@ -173,13 +173,13 @@ interleaved (size, rep) sweep would smear temporal effects into noise;
 judged unnecessary here.
 
 Results (fp32): CPU plateaus near 1 TFLOP/s across the sweep; the RTX 5060
-Ti climbs steeply to n≈1536 and flattens at 15–18 TFLOP/s (~20× once
+Ti climbs steeply to around n=1536 and flattens at 15-18 TFLOP/s (~20x once
 saturated). At n=256 the backends are nearly tied: launch overhead swamps
-the ~33 μs of GPU work, so small workloads do not automatically win on GPU.
+the ~33 us of GPU work, so small workloads do not automatically win on GPU.
 
 ```python
 def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
-    """Per-rep throughputs of an n×n fp32 matmul on `dev`, in TFLOP/s."""
+    """Per-rep throughputs of an n-by-n fp32 matmul on `dev`, in TFLOP/s."""
     a = torch.randn(n, n, device=dev)
     b = torch.randn(n, n, device=dev)
     a @ b  # warmup: JIT/alloc costs land here, not on the clock
@@ -218,8 +218,8 @@ plt.show()
 ```
 
 ```
- cpu: n=256:   0.545  n=384:   0.556  n=512:   0.586  n=768:   0.631  n=1024:   0.645  n=1536:   0.665  n=2048:   0.728  n=3072:   0.754  n=4096:   0.755  n=6144:   0.812  n=8192:   0.831
-cuda: n=256:   0.584  n=384:   1.996  n=512:   2.301  n=768:   7.657  n=1024:   8.954  n=1536:  14.149  n=2048:   5.778  n=3072:  15.431  n=4096:  16.699  n=6144:  15.503  n=8192:  17.685
+ cpu: n=256:   0.610  n=384:   0.948  n=512:   0.979  n=768:   1.043  n=1024:   0.760  n=1536:   0.752  n=2048:   0.768  n=3072:   0.748  n=4096:   0.793  n=6144:   0.819  n=8192:   0.836
+cuda: n=256:   0.541  n=384:   1.628  n=512:   3.511  n=768:   7.148  n=1024:   9.139  n=1536:  12.919  n=2048:  13.541  n=3072:  14.933  n=4096:  15.686  n=6144:  15.403  n=8192:  17.460
 ```
 
-![png](2026-07-03_hardware_detection.2026-07-04_files/2026-07-03_hardware_detection.2026-07-04_10_1.png)
+![png](2026-07-03_hardware_detection.2026-07-04_093535_files/2026-07-03_hardware_detection.2026-07-04_093535_10_1.png)

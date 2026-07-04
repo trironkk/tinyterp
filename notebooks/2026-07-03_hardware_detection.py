@@ -75,12 +75,12 @@ print(f"{get_device('cpu')=}")
 # the pass threshold empirically rather than assume one.
 #
 # Results (RTX 5060 Ti): fp32 accumulation-order noise ~3e-5, consistent with
-# the estimate √K·ε·|element| ≈ 16·1.2e-7·16 for K=256; TF32 error (~10-bit
+# the estimate sqrt(K)*eps*|element| ~ 16*1.2e-7*16 for K=256; TF32 error (~10-bit
 # mantissa) ~3e-2. The fp32 imprecision arises because floating-point
 # addition is not associative: every partial sum rounds to the nearest
 # representable value, so the blocked/parallel reduction order cuBLAS uses
 # accumulates different rounding errors than CPU BLAS, growing roughly with
-# √K for random data. To learn more: Goldberg, "What Every Computer Scientist
+# sqrt(K) for random data. To learn more: Goldberg, "What Every Computer Scientist
 # Should Know About Floating-Point Arithmetic"
 # (https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html), and
 # NVIDIA, "Floating Point and IEEE 754"
@@ -115,7 +115,7 @@ assert fp32_diff < 1e-4, "device result diverges from CPU beyond fp32 noise"
 print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 
 # %% [markdown]
-# **[F] Matmul throughput benchmark.** An n×n matmul costs 2n³ FLOPs; timing
+# **[F] Matmul throughput benchmark.** An n-by-n matmul costs 2n^3 FLOPs; timing
 # across sizes yields TFLOP/s per backend.
 #
 # Protocol: a warmup matmul absorbs one-time JIT and allocation costs;
@@ -123,11 +123,11 @@ print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 # an unsynchronized clock times the launch rather than the work); tensors are
 # created on-device so compute is measured, not PCIe transfer. All samples are
 # plotted (small dots) with the per-size mean (large point). Min/max error
-# bars were evaluated and rejected: a size's reps run back-to-back in a ~1–2 s
+# bars were evaluated and rejected: a size's reps run back-to-back in a ~1-2 s
 # window and share the prevailing GPU state, so per-size spread reflects
 # short-term jitter only, not run-to-run variance.
 #
-# Note: Observed a recurring ~3× throughput dip at n=2048 in some runs,
+# Note: Observed a recurring ~3x throughput dip at n=2048 in some runs,
 # absent in others. Not a size effect: the sweep's timing is deterministic, so
 # a periodic external GPU load (the WDDM scheduler time-slices this GPU
 # between CUDA and the Windows desktop under WSL2; VS Code renders through it)
@@ -138,13 +138,13 @@ print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 # judged unnecessary here.
 #
 # Results (fp32): CPU plateaus near 1 TFLOP/s across the sweep; the RTX 5060
-# Ti climbs steeply to n≈1536 and flattens at 15–18 TFLOP/s (~20× once
+# Ti climbs steeply to around n=1536 and flattens at 15-18 TFLOP/s (~20x once
 # saturated). At n=256 the backends are nearly tied: launch overhead swamps
-# the ~33 μs of GPU work, so small workloads do not automatically win on GPU.
+# the ~33 us of GPU work, so small workloads do not automatically win on GPU.
 
 # %% [F] Matmul throughput benchmark: CPU vs device across sizes, TFLOP/s
 def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
-    """Per-rep throughputs of an n×n fp32 matmul on `dev`, in TFLOP/s."""
+    """Per-rep throughputs of an n-by-n fp32 matmul on `dev`, in TFLOP/s."""
     a = torch.randn(n, n, device=dev)
     b = torch.randn(n, n, device=dev)
     a @ b  # warmup: JIT/alloc costs land here, not on the clock
