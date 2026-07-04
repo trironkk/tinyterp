@@ -50,17 +50,10 @@ if torch.cuda.is_available():
 # The `override` flag exists for benchmarking: comparing backends requires
 # pinning each side explicitly ([F] uses it for the CPU baseline).
 #
-# TODO: graduate to `tinyterp/device.py`.
+# Graduated to `tinyterp/device.py`; imported here rather than redefined.
 
 # %% [D] get_device(): device-agnostic selection helper
-def get_device(override: str | None = None) -> torch.device:
-    """Best available backend (cuda > cpu), or exactly `override`."""
-    if override is not None:
-        return torch.device(override)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
-
+from tinyterp import get_device
 
 device = get_device()
 print(f"{device=}")

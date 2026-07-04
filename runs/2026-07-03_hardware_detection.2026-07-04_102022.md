@@ -74,17 +74,10 @@ torch.backends.cuda.matmul.allow_tf32=False
 The `override` flag exists for benchmarking: comparing backends requires
 pinning each side explicitly ([F] uses it for the CPU baseline).
 
-TODO: graduate to `tinyterp/device.py`.
+Graduated to `tinyterp/device.py`; imported here rather than redefined.
 
 ```python
-def get_device(override: str | None = None) -> torch.device:
-    """Best available backend (cuda > cpu), or exactly `override`."""
-    if override is not None:
-        return torch.device(override)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
-
+from tinyterp import get_device
 
 device = get_device()
 print(f"{device=}")
@@ -218,8 +211,8 @@ plt.show()
 ```
 
 ```
- cpu: n=256:   0.610  n=384:   0.948  n=512:   0.979  n=768:   1.043  n=1024:   0.760  n=1536:   0.752  n=2048:   0.768  n=3072:   0.748  n=4096:   0.793  n=6144:   0.819  n=8192:   0.836
-cuda: n=256:   0.541  n=384:   1.628  n=512:   3.511  n=768:   7.148  n=1024:   9.139  n=1536:  12.919  n=2048:  13.541  n=3072:  14.933  n=4096:  15.686  n=6144:  15.403  n=8192:  17.460
+ cpu: n=256:   0.547  n=384:   0.553  n=512:   0.592  n=768:   0.622  n=1024:   0.848  n=1536:   0.660  n=2048:   0.773  n=3072:   0.729  n=4096:   0.736  n=6144:   0.806  n=8192:   0.818
+cuda: n=256:   0.730  n=384:   2.229  n=512:   4.322  n=768:   6.926  n=1024:   8.852  n=1536:  14.059  n=2048:   1.896  n=3072:  15.560  n=4096:  16.697  n=6144:  15.601  n=8192:  17.784
 ```
 
-![png](2026-07-03_hardware_detection.2026-07-04_093535_files/2026-07-03_hardware_detection.2026-07-04_093535_10_1.png)
+![png](2026-07-03_hardware_detection.2026-07-04_102022_files/2026-07-03_hardware_detection.2026-07-04_102022_10_1.png)
