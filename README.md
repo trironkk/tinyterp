@@ -69,6 +69,7 @@ make check
 - [x] Hardware detection
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Training data acquisition
+- [ ] Concurrency
 - [ ] Colab bootstrap cell
 
 ### Fundamentals & Theory
@@ -79,13 +80,17 @@ make check
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Softmax
 - [ ] Tokenization
+- [ ] Embeddings
 - [ ] Cross-entropy
 - [ ] Backpropagation
 - [ ] Optimization (SGD → Adam)
+- [ ] Layer normalization
 
 ### Transformer
 
 - [ ] Attention
+- [ ] Positional encodings
+- [ ] Residual stream
 - [ ] Network architecture
 - [ ] Training
 - [ ] Evaluation
@@ -101,6 +106,7 @@ make check
 - [ ] Probe attention patterns
 - [ ] Probe induction heads
 - [ ] Probe embeddings
+- [ ] Logit lens
 - [ ] Probe logits
 - [ ] Circuits
   - [ ] Activation patching
