@@ -24,11 +24,13 @@ start a step before the previous one's criterion is met.
 
 ## Logbook prose
 
+- Formal lab-notebook register, structured as a research lab notebook: objective, method,
+  measured results, conclusions. No conversational narration.
 - Document why, not what: non-obvious considerations, measured results, rejected
-  alternatives. Never narrate what the next line of code does.
+  alternatives. Never narrate what the next line of code does, and never justify imports.
+- No content that duplicates the README; link or omit.
 - No em-dashes anywhere, including cell-title separators — use colons, commas, or
   parentheses (en-dashes in numeric ranges are fine). Grep for `—` before finishing.
-- Collaboration stays implicit: never label it ("Steering:", "the user asked"). Weave
-  decisions in as natural design narrative in "we" voice — "the tolerance question turned
-  out to be the interesting part", "when we mirrored the CUDA print for MPS, it turned
-  out..." — so the notebook reads as a design record, not a transcript.
+- Collaboration stays implicit: decisions appear as recorded rationale ("min/max error
+  bars were evaluated and rejected"), never as attributed dialogue ("Steering:", "the
+  user asked").

@@ -1,30 +1,14 @@
 # %% [markdown]
 # # Hardware detection & verification
 #
-# What compute does this machine actually have, does torch see it, and does it
-# deliver? Defines `get_device()`, the device-selection helper every later
-# notebook will initialize from.
-#
-# **Scope decisions.** The matmul throughput benchmark lives here rather than
-# in a future matrix-multiplication notebook: it is essentially a smoke test
-# of the detected hardware, and the conceptual ground it covers (what a matmul
-# costs) was already familiar, so that session stays free for the operation
-# itself. Colab compatibility is by convention rather than machinery: these
-# percent-format `.py` files stay the source of truth, converted ad hoc with
-# `uvx jupytext --to ipynb` when needed, and the code stays device-agnostic so
-# a Colab GPU runtime works unchanged.
+# **Objective.** Characterize the compute available on this machine, verify
+# that torch drives it correctly, and quantify delivered matmul throughput.
+# Product: `get_device()`, the device-selection helper subsequent notebooks
+# initialize from.
 #
 # **Backlog**
-# - Colab bootstrap cell (guarded pip install, `"google.colab" in sys.modules`),
-#   deferred until a Colab account/free tier is actually set up.
-# - Graduate `get_device()` to `tinyterp/device.py` (follow-up commit).
-
-# %% [markdown]
-
-# **[A] Imports.** Standard library plus torch and matplotlib (both already in
-# pyproject). `time.perf_counter` is the benchmark clock in [F]; `platform`
-# fingerprints the host, because every number this notebook prints is
-# machine-specific and meaningless without knowing which box produced it.
+#
+# - Graduate `get_device()` to `tinyterp/device.py`.
 
 # %% [A] Imports
 import platform
@@ -37,39 +21,28 @@ print(f"python {platform.python_version()} on {platform.system()} ({platform.rel
 print(f"torch {torch.__version__}")
 
 # %% [markdown]
-# **[B] Backend detection.** We probe the two accelerator backends that matter
-# for this repo's machines, CUDA (this box, WSL2) and MPS (any Apple laptop),
-# and fall through to CPU, which is always available. Two distinctions worth
-# preserving:
+# **[B] Backend detection.** Each backend is probed for availability. Two
+# distinctions are recorded because they matter diagnostically:
 #
-# - `is_built()` vs `is_available()` separates "compiled into the wheel" from
-#   "usable right now": the diagnostic that matters when a backend
-#   unexpectedly vanishes (e.g. driver issues under WSL2).
+# - `is_built()` (compiled into the wheel) vs `is_available()` (usable now):
+#   the relevant split when a backend vanishes, e.g. driver issues under WSL2.
 # - `torch.version.cuda` is the toolkit the wheel was built against, not what
 #   the driver supports; the two can disagree.
-#
-# The backends aren't symmetrical: when we mirrored the CUDA version print for
-# MPS, it turned out MPS exposes no toolkit version at all, so its branch
-# reports the macOS version instead; on Apple silicon the OS *is* the driver.
 
-# %% [B] Backend detection: cuda / mps / cpu, what's available and why
+# %% [B] Backend detection: cuda / cpu availability
 print(f"cuda: built={torch.backends.cuda.is_built()}, available={torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"  toolkit {torch.version.cuda}, {torch.cuda.device_count()} device(s)")
-print(f"mps:  built={torch.backends.mps.is_built()}, available={torch.backends.mps.is_available()}")
-if torch.backends.mps.is_available():
-    print(f"  macOS {platform.mac_ver()[0]}")  # MPS has no toolkit version; the OS is the driver
 print("cpu:  always available")
 
 # %% [markdown]
-# **[C] Additional CUDA diagnostic details.** When CUDA is present,
-# `torch.cuda.get_device_properties()` gives the full picture: name, VRAM,
-# compute capability, and SM count. Compute capability drives the dtype story:
-# bf16 and TF32 (tensor-core float32 matmuls) both want Ampere (8.0+).
-# TF32 *capability* is a hardware fact, but whether matmuls actually use it is
-# a runtime switch (`torch.backends.cuda.matmul.allow_tf32`, off by default
-# since torch 1.12). We print both because the gap between them matters:
-# [E] measures what flipping that switch does to accuracy.
+# **[C] Additional CUDA diagnostic details.**
+# `torch.cuda.get_device_properties()` reports name, VRAM, compute capability,
+# and SM count. Compute capability determines the dtype regime: bf16 and TF32
+# (tensor-core float32 matmuls) require Ampere (8.0+). TF32 capability is a
+# hardware fact; whether matmuls use it is a runtime switch
+# (`torch.backends.cuda.matmul.allow_tf32`, off by default since torch 1.12).
+# Both are recorded; [E] measures the accuracy consequence of the switch.
 
 # %% [C] Additional CUDA diagnostic details
 if torch.cuda.is_available():
@@ -83,23 +56,19 @@ if torch.cuda.is_available():
     print(f"tf32 capable:       {cc >= (8, 0)} (matmul.allow_tf32={torch.backends.cuda.matmul.allow_tf32})")
 
 # %% [markdown]
-# **[D] `get_device()`.** The initialization idiom for every notebook in this
-# repo: best available backend, fixed priority cuda > mps > cpu. The optional
-# `override` hook exists because benchmarking surfaced the need: comparing
-# backends means pinning each side explicitly rather than fighting the
-# auto-selection ([F] uses it to get a CPU baseline on a CUDA box).
+# **[D] `get_device()`.** Selects the best available backend (cuda, else cpu).
+# The optional `override` pins an exact backend; [F] uses it for the CPU
+# baseline.
 #
-# TODO: graduate to `tinyterp/device.py` in a follow-up commit (see backlog).
+# TODO: graduate to `tinyterp/device.py`.
 
 # %% [D] get_device(): device-agnostic selection helper
 def get_device(override: str | None = None) -> torch.device:
-    """Best available backend (cuda > mps > cpu), or exactly `override`."""
+    """Best available backend (cuda > cpu), or exactly `override`."""
     if override is not None:
         return torch.device(override)
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -108,20 +77,20 @@ print(f"selected: {device}")
 print(f"override: {get_device('cpu')}")
 
 # %% [markdown]
-# **[E] Smoke test.** One matmul on the selected device, checked for
-# correctness against the same matmul on CPU, not just "it didn't crash".
+# **[E] Smoke test.** Verifies the selected device computes correctly, not
+# merely without error.
 #
-# The tolerance question ("why is 1e-4 the right value?") turned out to be the
-# interesting part, so instead of assuming an answer the cell measures it:
-# worst max-abs-diff across trials in fp32, then again with TF32 forced on.
-# Measured here (RTX 5060 Ti, 256×256): fp32 accumulation-order noise between
-# cuBLAS and CPU BLAS is ~3e-5 (consistent with the back-of-envelope
-# √K·ε·|element| ≈ 16·1.2e-7·16 for K=256 and elements of magnitude √K), while
-# TF32 error (~10-bit mantissa) is ~3e-2. Three orders of magnitude apart, so
-# the 1e-4 threshold cleanly separates the regimes: it tolerates backend noise
-# but fails on a silent TF32 downgrade or real breakage (O(1)). `allclose`
-# defaults would be flaky here: near-zero output elements fall back on its
-# `atol=1e-8`, which trips on ordinary fp32 noise.
+# Method: worst max-abs-diff between device and CPU matmuls (n=256) across
+# five trials, measured in fp32 and again with TF32 forced on, to establish
+# the pass threshold empirically rather than assume one.
+#
+# Results (RTX 5060 Ti): fp32 accumulation-order noise ~3e-5, consistent with
+# the estimate √K·ε·|element| ≈ 16·1.2e-7·16 for K=256; TF32 error (~10-bit
+# mantissa) ~3e-2. The regimes are three orders of magnitude apart, so a 1e-4
+# threshold accepts fp32 noise while rejecting a silent TF32 downgrade and
+# outright breakage (O(1)). `allclose` defaults are unsuitable here: near-zero
+# output elements fall back on `atol=1e-8`, which trips on ordinary fp32
+# noise.
 
 # %% [E] Smoke test: one op on the selected device, verify it computes
 def max_matmul_diff(trials: int = 5, n: int = 256) -> float:
@@ -147,34 +116,31 @@ print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 
 # %% [markdown]
 # **[F] Matmul throughput benchmark.** An n×n matmul costs 2n³ FLOPs; timing
-# it across sizes gives TFLOP/s per backend. Two things make GPU timing
-# honest: a warmup matmul (the first CUDA kernel launch pays one-time JIT and
-# allocation costs), and `torch.cuda.synchronize()` before reading the clock
-# (launches are async; without the sync you time the launch, not the work).
-# Tensors are created on-device so we measure compute, not PCIe transfer.
+# across sizes yields TFLOP/s per backend.
 #
-# The plotting evolved under scrutiny of an anomaly: repeated runs showed a
-# ~3× throughput dip at n=2048 that other runs didn't reproduce. Min/max error
-# bars came first, but they looked suspiciously narrow, and the suspicion was
-# justified: a size's reps run back-to-back in a ~1–2 s window, so they share
-# whatever GPU state prevails at that moment. Tight per-size spread measures
-# short-term jitter only and says nothing about run-to-run variance, which is
-# where the dip lives. So the plot shows every sample (small dots) plus the
-# mean (large point) instead. A dip that recurs at the same size still isn't
-# evidence of a size effect: the sweep's timing is deterministic, so any
-# periodic external GPU load (the WDDM scheduler time-slices this GPU between
-# CUDA and the Windows desktop under WSL2, and VS Code itself renders through
-# it) lands at the same offset, hence the same size, every run. Reading the
-# dots disambiguates: all 20 uniformly slow means a sustained contention
-# window; bimodal means sporadic preemption. An interleaved sweep (shuffled
-# (size, rep) order) would smear temporal effects into noise, but the scatter
-# was judged enough for a smoke test.
+# Protocol: a warmup matmul absorbs one-time JIT and allocation costs;
+# `torch.cuda.synchronize()` brackets the timed region (launches are async, so
+# an unsynchronized clock times the launch rather than the work); tensors are
+# created on-device so compute is measured, not PCIe transfer. All samples are
+# plotted (small dots) with the per-size mean (large point). Min/max error
+# bars were evaluated and rejected: a size's reps run back-to-back in a ~1–2 s
+# window and share the prevailing GPU state, so per-size spread reflects
+# short-term jitter only, not run-to-run variance.
 #
-# Measured here (fp32): CPU plateaus near 1 TFLOP/s across the whole sweep;
-# the RTX 5060 Ti climbs steeply until n≈1536, then flattens at 15–18 TFLOP/s
-# (~20× once saturated). At n=256 the two are nearly tied: launch overhead
-# swamps the ~33 μs of actual GPU work, which is why small models don't
-# automatically win on GPU.
+# Observed anomaly: a recurring ~3× throughput dip at n=2048 in some runs,
+# absent in others. Not a size effect: the sweep's timing is deterministic, so
+# a periodic external GPU load (the WDDM scheduler time-slices this GPU
+# between CUDA and the Windows desktop under WSL2; VS Code renders through it)
+# lands at the same offset, hence the same size, each run. The sample
+# distribution disambiguates: uniformly slow reps indicate a sustained
+# contention window; a bimodal split indicates sporadic preemption. An
+# interleaved (size, rep) sweep would smear temporal effects into noise;
+# judged unnecessary for a smoke test.
+#
+# Results (fp32): CPU plateaus near 1 TFLOP/s across the sweep; the RTX 5060
+# Ti climbs steeply to n≈1536 and flattens at 15–18 TFLOP/s (~20× once
+# saturated). At n=256 the backends are nearly tied: launch overhead swamps
+# the ~33 μs of GPU work, so small workloads do not automatically win on GPU.
 
 # %% [F] Matmul throughput benchmark: CPU vs device across sizes, TFLOP/s
 def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
