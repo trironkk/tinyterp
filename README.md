@@ -68,7 +68,9 @@ make check
 - [x] Dependency management
 - [x] Hardware detection
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
-- [ ] Training data acquisition
+- [x] Training data acquisition
+  - [2026-07-04_training_data_acquisition.py](notebooks/2026-07-04_training_data_acquisition.py)
+- [ ] Corpus cleaning / prose extraction
 - [ ] Concurrency
 - [ ] Colab bootstrap cell
 
@@ -119,6 +121,7 @@ make check
 ## Resources
 
 - https://karpathy.ai/zero-to-hero.html
+- [HuggingFace `wikimedia/wikipedia` dataset](https://huggingface.co/datasets/wikimedia/wikipedia)
 - https://www.3blue1brown.com/?topic=neural-networks
 - https://colah.github.io/
 - [Goldberg, "What Every Computer Scientist Should Know About Floating-Point Arithmetic"](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)
