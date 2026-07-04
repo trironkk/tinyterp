@@ -14,17 +14,25 @@ the first Address.
 1. **Watch.** The instant a PR is created, snapshot its baseline and arm a recurring watcher.
 
    - Baseline: `python3 <this-skill>/scripts/pr_snapshot.py <owner/repo> <pr> > $SCRATCHPAD/pr_<pr>_state.txt`.
-   - Arm: CronCreate `*/5 * * * *`, `recurring: true`, prompt = the Poll step below with
-     `<owner/repo>`, `<pr>`, and the absolute state-file and script paths inlined so the fire
-     is self-contained. Keep the returned job id — Close needs it.
+   - Arm: CronCreate `*/5 * * * *`, `recurring: true`. Keep the prompt lean — name the PR, the
+     absolute state-file and script paths, and "run the Poll step in a subagent" — rather than
+     inlining the whole procedure, since every fire re-enters the main loop. Keep the returned
+     job id — Close needs it.
    - Done when the job is armed and the baseline file is written.
 
-2. **Poll.** Each fire, re-snapshot and diff against the state file.
+2. **Poll.** Each fire, delegate the snapshot-and-diff to a subagent (Agent tool), so the API
+   and diff churn stays out of the main context. The subagent overwrites the state file and
+   returns only `NO CHANGE` or a one-line summary of what moved; the main loop acts only on a
+   change.
 
-   - No diff → stop silently, no notification.
-   - Diff → overwrite the state file, then PushNotification a one-line summary of what moved.
-     Route it: new review feedback → Address; `merged=True` or `state=closed` → Close.
+   - `NO CHANGE` → nothing, no notification.
+   - Change → PushNotification the summary, then route: new review feedback → Address;
+     `merged=True` or `state=closed` → Close.
    - Done when the state file matches the live PR and any change is routed.
+
+   A session cron re-enters the main loop every fire, so even a delegated poll adds a little
+   context each time. For a long-lived or context-free watch, run it off-session instead — a
+   GitHub Actions `pull_request` workflow, or a `/schedule` cloud agent.
 
 3. **Address.** On new review feedback, resolve every open thread before pushing.
 
