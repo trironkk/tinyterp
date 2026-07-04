@@ -28,7 +28,7 @@ uv run python notebooks/<file>.py
 Convert a notebook to `.ipynb`, e.g. for Colab (the jupytext `.py` files are the source of truth; no `.ipynb` is committed):
 
 ```sh
-uvx jupytext --to ipynb notebooks/<file>.py
+uv run jupytext --to ipynb notebooks/<file>.py
 ```
 
 Add a dependency:
@@ -43,10 +43,11 @@ Format markdown (checked in CI):
 git ls-files '*.md' | xargs uv run --only-group lint mdformat
 ```
 
-Record a full notebook run in `runs/` for posterity (committed, unlike `artifacts/`):
+Record a full notebook run in `runs/` for posterity (committed, unlike `artifacts/`), rendered as GitHub-friendly markdown with inline plots:
 
 ```sh
-MPLBACKEND=Agg uv run python notebooks/<file>.py 2>&1 | tee runs/<file>.$(date +%F).log
+uv run jupytext --to ipynb --output - notebooks/<file>.py |
+  uv run jupyter nbconvert --stdin --execute --to markdown --output-dir runs --output "<file>.$(date +%F)"
 ```
 
 ## Curriculum
