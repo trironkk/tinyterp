@@ -41,8 +41,22 @@ updated_at() {
     | python3 -c 'import sys,json; print(json.load(sys.stdin)["updated_at"])' 2>/dev/null
 }
 
-# Default the gate to the server's current updated_at at launch.
-while [ -z "$SINCE" ]; do SINCE=$(updated_at); [ -z "$SINCE" ] && sleep 10; done
+# Default the gate to updated_at, but let it SETTLE first: GitHub's updated_at
+# can lag a just-made write by a few seconds, so read until two consecutive
+# reads agree. This ensures writes in flight at launch — including the session's
+# own, when it re-arms right after replying — sit at the gate, not past it, so
+# the session never wakes on its own work.
+if [ -z "$SINCE" ]; then
+  a=""
+  while [ -z "$a" ]; do a=$(updated_at); [ -z "$a" ] && sleep 5; done
+  while :; do
+    sleep 5
+    b=$(updated_at)
+    [ -n "$b" ] && [ "$b" = "$a" ] && break   # stable: two reads agree
+    [ -n "$b" ] && a="$b"                      # advanced: keep settling
+  done
+  SINCE="$a"
+fi
 echo "watching $REPO#$PR for activity after $SINCE"
 
 while true; do

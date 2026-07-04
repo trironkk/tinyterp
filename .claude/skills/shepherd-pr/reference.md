@@ -10,9 +10,12 @@ Idle polling costs the session no context; only a real wake does. It reports onl
 happened; the session pulls the details on wake (snapshot / API).
 
 The gate is a **server timestamp**: it polls the PR's `updated_at` (GitHub's own clock, so no
-local skew) and wakes on the first value strictly newer than `SINCE`. `SINCE` defaults to
-`updated_at` at launch. `updated_at` bumps on comments, reviews, commits, edits, merge and close,
-but **not** on CI check-runs — so CI churn never wakes the session.
+local skew) and wakes on the first value strictly newer than `SINCE`. `SINCE` defaults to a
+*settled* `updated_at` at launch — read until two consecutive reads agree, because `updated_at`
+can lag a just-made write by a few seconds; without the settle a re-armed watcher would wake on
+the session's own reply once the lagging timestamp caught up. `updated_at` bumps on comments,
+reviews, commits, edits, merge and close, but **not** on CI check-runs — so CI churn never wakes
+the session.
 
 Keep **exactly one watcher**. Each session response re-arms a fresh one (no `SINCE`, so it reads
 `updated_at` after the response landed) — that is what stops the session from waking on its own
