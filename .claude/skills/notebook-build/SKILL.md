@@ -1,6 +1,6 @@
 ---
-name: session-build
-description: Phase 4 of a build session (see session-arc) — fill the skeleton cell by cell in lockstep. Invoke only after the skeleton is approved; not a standalone skill.
+name: notebook-build
+description: Fill a notebook's skeleton cell by cell in lockstep, ending on a review gate. Reached by notebook-arc once the skeleton is approved; not standalone.
 ---
 
 **Build.** In lockstep: fill one skeleton cell, update its logbook, narrate one sentence, ask
@@ -14,7 +14,7 @@ completed notebook for review, and hold. Build is done only when every cell is f
 logbook is current, and the user has explicitly approved the finished notebook. A bare
 "continue" on the last cell is not that approval — it names a next cell that no longer exists;
 the go-ahead to leave Build must name the notebook or the finish. Only then invoke
-`session-finalize`.
+`notebook-finalize`.
 
 ## Logbook prose
 
