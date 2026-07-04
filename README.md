@@ -15,13 +15,14 @@ A personal repository for project-based mechanistic interpretability exploration
 
 ### Engineering
 
-- [ ] Dependency management
-- [ ] Hardware detection
+- [x] Dependency management (covered by the workspace scaffold: uv, pyproject, pinned Python)
+- [x] Hardware detection (notebooks/2026-07-03_hardware_detection.py)
 - [ ] Training data acquisition
 
 ### Fundamentals & Theory
 
-- [ ] Matrix multiplication
+- [ ] Matrix multiplication (throughput benchmarked in the hardware notebook; the operation itself still open)
+- [ ] Numerical precision (fp32 accumulation noise vs TF32/bf16; surfaced by the hardware notebook's tolerance question)
 - [ ] Softmax
 - [ ] Tokenization
 - [ ] Cross-entropy
@@ -54,6 +55,15 @@ A personal repository for project-based mechanistic interpretability exploration
 - [ ] Sparse Autoencoders
   - [ ] Training
   - [ ] Feature interpretation
+
+## Colab
+
+Notebooks are Colab-compatible by convention, not machinery:
+
+- The percent-format `.py` files are the source of truth; no `.ipynb` is committed.
+- To run one in Colab, convert it ad hoc: `uvx jupytext --to ipynb notebooks/<file>.py`, then upload.
+- Code stays device-agnostic (`get_device()` falls through cuda > mps > cpu), so Colab GPU runtimes work unchanged.
+- Planned: a guarded bootstrap cell (`"google.colab" in sys.modules` gates a pip install), deferred until a Colab account/free tier is set up.
 
 ## Resources
 

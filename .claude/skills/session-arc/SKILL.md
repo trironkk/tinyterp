@@ -21,3 +21,14 @@ start a step before the previous one's criterion is met.
 4. **Conclude.** Update the README curriculum: check off what the session covered, add
    resources consulted to Resources, and file newly surfaced concepts as new items. Done when
    the curriculum reflects the session.
+
+## Logbook prose
+
+- Document why, not what: non-obvious considerations, measured results, rejected
+  alternatives. Never narrate what the next line of code does.
+- No em-dashes anywhere, including cell-title separators — use colons, commas, or
+  parentheses (en-dashes in numeric ranges are fine). Grep for `—` before finishing.
+- Collaboration stays implicit: never label it ("Steering:", "the user asked"). Weave
+  decisions in as natural design narrative in "we" voice — "the tolerance question turned
+  out to be the interesting part", "when we mirrored the CUDA print for MPS, it turned
+  out..." — so the notebook reads as a design record, not a transcript.
