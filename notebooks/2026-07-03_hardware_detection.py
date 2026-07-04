@@ -13,48 +13,41 @@ import time
 import matplotlib.pyplot as plt
 import torch
 
-print(f"python {platform.python_version()} on {platform.system()} ({platform.release()})")
-print(f"torch {torch.__version__}")
-
-# %% [markdown]
-# **[B] Backend detection.** Each backend is probed for availability. Two
-# distinctions are recorded because they matter diagnostically:
-#
-# - `is_built()` (compiled into the wheel) vs `is_available()` (usable now):
-#   the relevant split when a backend vanishes, e.g. driver issues under WSL2.
-# - `torch.version.cuda` is the toolkit the wheel was built against, not what
-#   the driver supports; the two can disagree.
+print(f"{platform.platform()=}")
+print(f"{platform.python_version()=}")
+print(f"{torch.__version__=}")
 
 # %% [B] Backend detection: cuda / cpu availability
-print(f"cuda: built={torch.backends.cuda.is_built()}, available={torch.cuda.is_available()}")
+print(f"{torch.backends.cuda.is_built()=}")
+print(f"{torch.cuda.is_available()=}")
 if torch.cuda.is_available():
-    print(f"  toolkit {torch.version.cuda}, {torch.cuda.device_count()} device(s)")
-print("cpu:  always available")
+    print(f"{torch.version.cuda=}")
+    print(f"{torch.cuda.device_count()=}")
 
 # %% [markdown]
-# **[C] Additional CUDA diagnostic details.**
-# `torch.cuda.get_device_properties()` reports name, VRAM, compute capability,
-# and SM count. Compute capability determines the dtype regime: bf16 and TF32
-# (tensor-core float32 matmuls) require Ampere (8.0+). TF32 capability is a
-# hardware fact; whether matmuls use it is a runtime switch
-# (`torch.backends.cuda.matmul.allow_tf32`, off by default since torch 1.12).
-# Both are recorded; [E] measures the accuracy consequence of the switch.
+# **[C] Additional CUDA diagnostic details.** Compute capability determines
+# the dtype regime: bf16 and TF32 (tensor-core float32 matmuls) require
+# Ampere (8.0+). TF32 capability is a hardware fact; whether matmuls use it
+# is a runtime switch (`torch.backends.cuda.matmul.allow_tf32`, off by
+# default since torch 1.12). Both are recorded; [E] measures the accuracy
+# consequence of the switch.
 
 # %% [C] Additional CUDA diagnostic details
 if torch.cuda.is_available():
     props = torch.cuda.get_device_properties(0)
     cc = (props.major, props.minor)
-    print(f"name:               {props.name}")
-    print(f"vram:               {props.total_memory / 2**30:.1f} GiB")
-    print(f"compute capability: {props.major}.{props.minor}")
-    print(f"multiprocessors:    {props.multi_processor_count} SMs")
-    print(f"bf16 supported:     {torch.cuda.is_bf16_supported()}")
-    print(f"tf32 capable:       {cc >= (8, 0)} (matmul.allow_tf32={torch.backends.cuda.matmul.allow_tf32})")
+    print(f"{props.name=}")
+    print(f"{props.total_memory / 2**30=:.1f} GiB")
+    print(f"{cc=}")
+    print(f"{props.multi_processor_count=}")
+    print(f"{torch.cuda.is_bf16_supported()=}")
+    print(f"{cc >= (8, 0)=}  # tf32 capable")
+    print(f"{torch.backends.cuda.matmul.allow_tf32=}")
 
 # %% [markdown]
 # **[D] `get_device()`.** Selects the best available backend (cuda, else cpu).
-# The optional `override` pins an exact backend; [F] uses it for the CPU
-# baseline.
+# The `override` flag exists for benchmarking: comparing backends requires
+# pinning each side explicitly ([F] uses it for the CPU baseline).
 #
 # TODO: graduate to `tinyterp/device.py`.
 
@@ -69,12 +62,12 @@ def get_device(override: str | None = None) -> torch.device:
 
 
 device = get_device()
-print(f"selected: {device}")
-print(f"override: {get_device('cpu')}")
+print(f"{device=}")
+print(f"{get_device('cpu')=}")
 
 # %% [markdown]
-# **[E] Smoke test.** Verifies the selected device computes correctly, not
-# merely without error.
+# **[E] Correctness & precision test.** Verifies the selected device computes
+# correctly, not merely without error.
 #
 # Method: worst max-abs-diff between device and CPU matmuls (n=256) across
 # five trials, measured in fp32 and again with TF32 forced on, to establish
@@ -82,13 +75,22 @@ print(f"override: {get_device('cpu')}")
 #
 # Results (RTX 5060 Ti): fp32 accumulation-order noise ~3e-5, consistent with
 # the estimate √K·ε·|element| ≈ 16·1.2e-7·16 for K=256; TF32 error (~10-bit
-# mantissa) ~3e-2. The regimes are three orders of magnitude apart, so a 1e-4
-# threshold accepts fp32 noise while rejecting a silent TF32 downgrade and
-# outright breakage (O(1)). `allclose` defaults are unsuitable here: near-zero
-# output elements fall back on `atol=1e-8`, which trips on ordinary fp32
-# noise.
+# mantissa) ~3e-2. The fp32 imprecision arises because floating-point
+# addition is not associative: every partial sum rounds to the nearest
+# representable value, so the blocked/parallel reduction order cuBLAS uses
+# accumulates different rounding errors than CPU BLAS, growing roughly with
+# √K for random data. To learn more: Goldberg, "What Every Computer Scientist
+# Should Know About Floating-Point Arithmetic"
+# (https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html), and
+# NVIDIA, "Floating Point and IEEE 754"
+# (https://docs.nvidia.com/cuda/floating-point/).
+#
+# The two regimes are three orders of magnitude apart, so a 1e-4 threshold
+# accepts fp32 noise while rejecting a silent TF32 downgrade and outright
+# breakage (O(1)). `allclose` defaults are unsuitable here: near-zero output
+# elements fall back on `atol=1e-8`, which trips on ordinary fp32 noise.
 
-# %% [E] Smoke test: one op on the selected device, verify it computes
+# %% [E] Correctness & precision test: device matmul vs CPU reference
 def max_matmul_diff(trials: int = 5, n: int = 256) -> float:
     """Worst max-abs-diff between device and CPU matmul across trials."""
     worst = 0.0
@@ -100,11 +102,12 @@ def max_matmul_diff(trials: int = 5, n: int = 256) -> float:
 
 
 fp32_diff = max_matmul_diff()
-print(f"fp32 max abs diff over 5 trials: {fp32_diff:.2e}")
+print(f"{fp32_diff=:.2e}")
 
 if device.type == "cuda":
     torch.backends.cuda.matmul.allow_tf32 = True
-    print(f"tf32 max abs diff over 5 trials: {max_matmul_diff():.2e}")
+    tf32_diff = max_matmul_diff()
+    print(f"{tf32_diff=:.2e}")
     torch.backends.cuda.matmul.allow_tf32 = False
 
 assert fp32_diff < 1e-4, "device result diverges from CPU beyond fp32 noise"
@@ -131,7 +134,7 @@ print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 # distribution disambiguates: uniformly slow reps indicate a sustained
 # contention window; a bimodal split indicates sporadic preemption. An
 # interleaved (size, rep) sweep would smear temporal effects into noise;
-# judged unnecessary for a smoke test.
+# judged unnecessary here.
 #
 # Results (fp32): CPU plateaus near 1 TFLOP/s across the sweep; the RTX 5060
 # Ti climbs steeply to n≈1536 and flattens at 15–18 TFLOP/s (~20× once

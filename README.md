@@ -11,12 +11,37 @@ A personal repository for project-based mechanistic interpretability exploration
 | `artifacts/` | Gitignored. Checkpoints, tokenizers, plots. Notebooks load from here rather than retraining. |
 | `data/`      | Gitignored. Downloaded datasets and caches.                                                  |
 
-## Dependencies
+## Recipes
 
-Managed with `uv`: Python is pinned to 3.12 and dependencies are declared in
-`pyproject.toml`. Everything runs through `uv run …` (package modules via
-`uv run python -m tinyterp.<module>`); notebooks assume the project environment
-rather than installing anything themselves.
+Run a package module:
+
+```sh
+uv run python -m tinyterp.<module>
+```
+
+Run a notebook end to end (or cell-by-cell in VS Code's interactive window):
+
+```sh
+uv run python notebooks/<file>.py
+```
+
+Convert a notebook to `.ipynb`, e.g. for Colab (the jupytext `.py` files are the source of truth; no `.ipynb` is committed):
+
+```sh
+uvx jupytext --to ipynb notebooks/<file>.py
+```
+
+Add a dependency:
+
+```sh
+uv add <package>
+```
+
+Format markdown (checked in CI):
+
+```sh
+git ls-files '*.md' | xargs uv run --only-group lint mdformat
+```
 
 ## Curriculum
 
@@ -32,8 +57,8 @@ rather than installing anything themselves.
 
 - [x] Matrix multiplication
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
-- [ ] Numerical precision
-  - fp32 accumulation noise vs TF32/bf16; surfaced by [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
+- [x] Numerical precision
+  - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Softmax
 - [ ] Tokenization
 - [ ] Cross-entropy
@@ -66,20 +91,6 @@ rather than installing anything themselves.
 - [ ] Sparse Autoencoders
   - [ ] Training
   - [ ] Feature interpretation
-
-## Colab
-
-Notebooks will be Colab-compatible by convention, not machinery:
-
-- The jupytext `.py` files are the source of truth; no `.ipynb` is committed.
-
-- To run one in Colab, convert it ad hoc and upload the result:
-
-  ```sh
-  uvx jupytext --to ipynb notebooks/<file>.py
-  ```
-
-- Code stays device-agnostic (`get_device()` falls through cuda > cpu), so Colab GPU runtimes work unchanged.
 
 ## Resources
 
