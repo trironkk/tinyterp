@@ -5,10 +5,6 @@
 # that torch drives it correctly, and quantify delivered matmul throughput.
 # Product: `get_device()`, the device-selection helper subsequent notebooks
 # initialize from.
-#
-# **Backlog**
-#
-# - Graduate `get_device()` to `tinyterp/device.py`.
 
 # %% [A] Imports
 import platform

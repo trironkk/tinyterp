@@ -30,8 +30,8 @@ rather than installing anything themselves.
 
 ### Fundamentals & Theory
 
-- [ ] Matrix multiplication
-  - throughput benchmarked in [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py); the operation itself still open
+- [x] Matrix multiplication
+  - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Numerical precision
   - fp32 accumulation noise vs TF32/bf16; surfaced by [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Softmax
@@ -71,7 +71,7 @@ rather than installing anything themselves.
 
 Notebooks will be Colab-compatible by convention, not machinery:
 
-- The percent-format `.py` files are the source of truth; no `.ipynb` is committed.
+- The jupytext `.py` files are the source of truth; no `.ipynb` is committed.
 
 - To run one in Colab, convert it ad hoc and upload the result:
 
