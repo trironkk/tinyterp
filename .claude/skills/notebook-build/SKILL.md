@@ -1,19 +1,17 @@
 ---
 name: notebook-build
-description: Fill a notebook's skeleton cell by cell in lockstep, ending on a review gate. Reached by notebook-arc once the skeleton is approved; not standalone.
+description: Fill a notebook's approved skeleton cell by cell in lockstep. Reached by notebook-arc.
 ---
 
 **Build.** In lockstep: fill one skeleton cell, update its logbook, narrate one sentence, ask
-"Questions?", wait. Never move ahead of the user. A bare "continue" advances exactly one cell —
-it authorizes the next cell only, never leaving Build. The logbook is the cell's markdown
-description — what it does, why this approach, and the steering that shaped it, written as it
-lands, never backfilled.
+"Questions?", wait. A bare "continue" advances exactly one cell and never more. The logbook is
+the cell's markdown description — what it does, why this approach, and the steering that shaped
+it, written as it lands, never backfilled.
 
-**Review gate.** When the final cell is filled, do not roll forward. Stop, present the
-completed notebook for review, and hold. Build is done only when every cell is filled, the
-logbook is current, and the user has explicitly approved the finished notebook. A bare
-"continue" on the last cell is not that approval — it names a next cell that no longer exists;
-the go-ahead to leave Build must name the notebook or the finish. Only then invoke
+**Review gate.** The last cell has no next cell for "continue" to name, so do not roll into
+shipping. Stop, present the completed notebook, and hold. Build is done only when every cell is
+filled, the logbook is current, and the user has explicitly approved the finished notebook — an
+approval that names the notebook or the finish, not the next cell. Only then invoke
 `notebook-finalize`.
 
 ## Logbook prose

@@ -1,6 +1,6 @@
 ---
 name: notebook-finalize
-description: Review the finished notebook holistically, then ship it. Reached by notebook-build once the notebook is approved; not standalone.
+description: Review the finished notebook holistically, then ship it. Reached by notebook-build once the notebook is approved.
 ---
 
 With the notebook approved, review it holistically before shipping. Dispatch subagents to read
@@ -10,7 +10,9 @@ the rest as curriculum items.
 
 Then the local wrap-up: update the README curriculum (check off what the notebook covered, add
 resources consulted to Resources, file newly surfaced concepts as new items), run `make record`,
-and commit. All of this stays on the branch and is reversible.
+and commit. This commit is deliberately un-gated: it is local to the branch and reversible.
 
-Ship only after a separate, explicit go-ahead: invoke `open-pr`. Approving the notebook, or the
-finalize work, is not approval to ship — the user can say "not yet" and the branch simply waits.
+Finalize is done only when every subagent suggestion is folded in or filed, the README reflects
+the notebook, `make record` has run, and the wrap-up is committed. Present that finished state,
+then ship only on a go-ahead given against it — invoke `open-pr`. A "ship it" said back at the
+build review does not carry through here; the user can still say "not yet" and the branch waits.
