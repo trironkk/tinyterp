@@ -46,9 +46,19 @@ git ls-files '*.md' | xargs uv run --only-group lint mdformat
 Record a full notebook run in `runs/` for posterity (committed, unlike `artifacts/`), rendered as GitHub-friendly markdown with inline plots:
 
 ```sh
-uv run jupytext --to ipynb --output - notebooks/<file>.py |
-  uv run jupyter nbconvert --stdin --execute --to markdown --output-dir runs --output "<file>.$(date +%F)"
-uv run --only-group lint mdformat runs/
+make record NB=notebooks/<file>.py
+```
+
+Install the pre-commit hook that blocks committing a notebook whose latest `runs/` record is missing or stale (CI checks the same thing):
+
+```sh
+make hooks
+```
+
+Run the repo checks locally (run records match notebook sources; markdown formatted):
+
+```sh
+make check
 ```
 
 ## Curriculum
