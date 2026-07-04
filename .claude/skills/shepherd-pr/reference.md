@@ -44,6 +44,11 @@ PR body); add `-H "Authorization: Bearer $TOKEN"` when a token is available.
 `POST /repos/<owner/repo>/pulls/<pr>/comments/<comment_id>/replies` with `{"body": "…"}`.
 Get the `<comment_id>`s from `GET …/pulls/<pr>/comments`.
 
+Replies post under the session's GitHub identity (the user's token), so they carry no built-in
+sign that Claude wrote them — unlike commits (`Co-Authored-By` trailer) and PR bodies (the
+Claude Code footer). To keep the conversation honestly attributed, end **every** reply body with
+the marker `\n\n🤖 via Claude Code` so a reader can tell an automated reply from a hand-typed one.
+
 ## Follow-up vs amend
 
 Before any review exists: amend for a clean single commit. Once the PR has been reviewed:
