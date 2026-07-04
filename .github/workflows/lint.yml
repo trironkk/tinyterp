@@ -13,3 +13,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Check markdown formatting
         run: git ls-files '*.md' | xargs uv run --only-group lint mdformat --check
+
+  run-records:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check notebooks have matching run records
+        run: python3 scripts/check_runs.py
