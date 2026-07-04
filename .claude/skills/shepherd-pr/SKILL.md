@@ -37,8 +37,9 @@ the first Address.
    - Apply each requested change and verify it (run the affected code or repo checks, not just
      eyeball it).
    - Commit as a follow-up (never amend a reviewed PR), push over HTTPS, reply to each thread
-     citing the commit sha. End every reply body with the `🤖 via Claude Code` marker (see
-     [reference.md](reference.md)) so automated replies stay distinguishable from hand-typed ones.
+     citing the commit sha. End every reply body with the `🤖 via Claude Code` marker — replies
+     post under the user's identity, so this keeps automated replies distinguishable from
+     hand-typed ones.
    - Re-arm: launch a fresh `pr_watch.sh` with no SINCE — it reads `updated_at` after your push,
      so your own change sits at the gate and can never wake the session. Keep exactly one watcher;
      each response replaces it.
