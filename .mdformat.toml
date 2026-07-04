@@ -1,0 +1,2 @@
+# Config for mdformat (run via: git ls-files '*.md' | xargs uv run --only-group lint mdformat)
+number = true # consecutive ordered-list numbering (1. 2. 3.) instead of all 1.
