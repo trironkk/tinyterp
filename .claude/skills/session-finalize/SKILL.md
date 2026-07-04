@@ -1,14 +1,17 @@
 ---
 name: session-finalize
-description: Phase 5 of a build session (see session-arc) — local, reversible wrap-up (curriculum, make record, commit). Invoke only after the finished notebook is explicitly approved; not a standalone skill. Does not push.
+description: Final phase of a notebook arc (see session-arc) — holistic review, then ship. Invoke only after the finished notebook is explicitly approved; not a standalone skill.
 ---
 
-**Finalize (local, reversible).** With the notebook approved, do the local wrap-up: update the
-README curriculum (check off what the session covered, add resources consulted to Resources,
-file newly surfaced concepts as new items), run `make record`, and commit. All of this stays on
-the session branch and is reversible. Done when the curriculum reflects the session and the
-work is committed locally. Then stop and hold — do not push.
+With the notebook approved, review it holistically before shipping. Dispatch subagents to read
+the whole notebook end to end and report back: followups worth filing, and how to re-organize
+cells for clarity. Work their suggestions through with the user — fold the clear wins in, file
+the rest as curriculum items.
 
-Shipping is a separate skill. Invoke `session-ship` only after a separate, explicit go-ahead to
-ship — approving the notebook, or approving this finalize work, is not approval to ship. The
-user can say "not yet" here and the branch simply waits, its ship instructions unloaded.
+Then the local wrap-up: update the README curriculum (check off what the session covered, add
+resources consulted to Resources, file newly surfaced concepts as new items), run `make record`,
+and commit. All of this stays on the branch and is reversible.
+
+Ship only after a separate, explicit go-ahead: push the branch, open the PR, and hand off to the
+shepherd-pr skill. Approving the notebook, or the finalize work, is not approval to ship — the
+user can say "not yet" and the branch simply waits.
