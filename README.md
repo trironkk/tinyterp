@@ -73,6 +73,7 @@ make check
 - [ ] Corpus cleaning / prose extraction
 - [ ] Concurrency
 - [ ] Colab bootstrap cell
+- [ ] Pulling open-weight models (GPT-2, Gemma, DeepSeek)
 
 ### Fundamentals & Theory
 
@@ -82,21 +83,28 @@ make check
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Softmax
 - [ ] Tokenization
+  - [ ] BPE tokenizer training
 - [ ] Embeddings
 - [ ] Cross-entropy
 - [ ] Backpropagation
+  - [ ] Autograd engine from scratch (micrograd)
 - [ ] Optimization (SGD → Adam)
+- [ ] Weight initialization
 - [ ] Layer normalization
+- [ ] Batch normalization
 
 ### Transformer
 
+- [ ] RNN/LSTM/GRU baselines
 - [ ] Attention
 - [ ] Positional encodings
 - [ ] Residual stream
 - [ ] Network architecture
+- [ ] Mixture of experts
 - [ ] Training
 - [ ] Evaluation
 - [ ] Sampling
+- [ ] KV caching
 
 ### Post-training
 
@@ -108,8 +116,12 @@ make check
 - [ ] Probe attention patterns
 - [ ] Probe induction heads
 - [ ] Probe embeddings
+- [ ] Probe MLP feedforward memories
 - [ ] Logit lens
 - [ ] Probe logits
+- [ ] Representation geometry (t-SNE / PCA / UMAP)
+- [ ] Feature visualization (activation maximization)
+- [ ] Attribution & saliency maps
 - [ ] Circuits
   - [ ] Activation patching
   - [ ] Circuit tracing
