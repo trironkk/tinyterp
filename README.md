@@ -71,6 +71,7 @@ make check
 - [x] Training data acquisition
   - [2026-07-04_training_data_acquisition.py](notebooks/2026-07-04_training_data_acquisition.py)
 - [ ] Corpus cleaning / prose extraction
+- [ ] Concurrency
 - [ ] Colab bootstrap cell
 
 ### Fundamentals & Theory
@@ -81,13 +82,17 @@ make check
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [ ] Softmax
 - [ ] Tokenization
+- [ ] Embeddings
 - [ ] Cross-entropy
 - [ ] Backpropagation
 - [ ] Optimization (SGD → Adam)
+- [ ] Layer normalization
 
 ### Transformer
 
 - [ ] Attention
+- [ ] Positional encodings
+- [ ] Residual stream
 - [ ] Network architecture
 - [ ] Training
 - [ ] Evaluation
@@ -103,6 +108,7 @@ make check
 - [ ] Probe attention patterns
 - [ ] Probe induction heads
 - [ ] Probe embeddings
+- [ ] Logit lens
 - [ ] Probe logits
 - [ ] Circuits
   - [ ] Activation patching
