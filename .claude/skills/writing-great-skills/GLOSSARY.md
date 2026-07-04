@@ -1,3 +1,6 @@
+<!-- Vendored from https://github.com/mattpocock/skills @ 8370e76
+     (skills/productivity/writing-great-skills/GLOSSARY.md) — plain copy, no submodule. -->
+
 # Glossary — Building Great Skills
 
 The domain model for what makes a skill great. A skill exists to wrangle determinism out of a stochastic system; the root virtue is **Predictability**, and every term below is a lever on it. This is the disclosed reference for [`writing-great-skills`](SKILL.md).
