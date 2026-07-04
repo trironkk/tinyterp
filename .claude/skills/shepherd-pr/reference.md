@@ -2,6 +2,22 @@
 
 Sandbox- and repo-specific facts the steps rely on. Kept out of SKILL.md so the steps stay legible.
 
+## Watcher
+
+`scripts/pr_watch.sh <owner/repo> <pr> [SINCE]` is the poller. Run it **detached** — a background
+process exiting re-invokes the session with its final line, so it wakes the session by exiting.
+Idle polling costs the session no context; only a real wake does. It reports only *that* activity
+happened; the session pulls the details on wake (snapshot / API).
+
+The gate is a **server timestamp**: it polls the PR's `updated_at` (GitHub's own clock, so no
+local skew) and wakes on the first value strictly newer than `SINCE`. `SINCE` defaults to
+`updated_at` at launch. `updated_at` bumps on comments, reviews, commits, edits, merge and close,
+but **not** on CI check-runs — so CI churn never wakes the session.
+
+Keep **exactly one watcher**. Each session response re-arms a fresh one (no `SINCE`, so it reads
+`updated_at` after the response landed) — that is what stops the session from waking on its own
+work: the response sits at the new gate, not after it.
+
 ## GitHub auth
 
 The sandbox proxy injects credentials for github.com HTTPS traffic; `gh` is **not** logged in
