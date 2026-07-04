@@ -11,9 +11,12 @@ import time
 import matplotlib.pyplot as plt
 import torch
 
+torch.manual_seed(0)
+
 print(f"{platform.platform()=}")
 print(f"{platform.python_version()=}")
 print(f"{torch.__version__=}")
+print(f"{torch.initial_seed()=}")
 
 # %% [B] Backend detection: cuda / cpu availability
 print(f"{torch.backends.cuda.is_built()=}")

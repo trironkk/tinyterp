@@ -43,6 +43,12 @@ Format markdown (checked in CI):
 git ls-files '*.md' | xargs uv run --only-group lint mdformat
 ```
 
+Record a full notebook run in `runs/` for posterity (committed, unlike `artifacts/`):
+
+```sh
+MPLBACKEND=Agg uv run python notebooks/<file>.py 2>&1 | tee runs/<file>.$(date +%F).log
+```
+
 ## Curriculum
 
 ### Engineering
@@ -97,3 +103,5 @@ git ls-files '*.md' | xargs uv run --only-group lint mdformat
 - https://karpathy.ai/zero-to-hero.html
 - https://www.3blue1brown.com/?topic=neural-networks
 - https://colah.github.io/
+- [Goldberg, "What Every Computer Scientist Should Know About Floating-Point Arithmetic"](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)
+- [NVIDIA, "Floating Point and IEEE 754"](https://docs.nvidia.com/cuda/floating-point/)
