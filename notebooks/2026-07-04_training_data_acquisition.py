@@ -61,10 +61,15 @@ print(f"{articles.cache_files=}")
 #
 # Caveat surfaced here: the "pre-cleaned" claim holds for prose but not for
 # tables. Article bodies drawn from infoboxes or statistics tables retain raw
-# wikitext (`rowspan`, `colspan`, `|-` row separators); e.g. the footballer
-# `Hans-Jörg Butt` (idx 50000) is largely a career-stats table. Prose-only
-# filtering is therefore a real downstream concern, not assumed away by the
-# source.
+# wikitext:
+#
+# - `rowspan`, `colspan`: table cell-span attributes.
+# - `|-`: table row separators.
+# - `Hans-Jörg Butt` (idx 50000): an article that is largely a career-stats
+#   table rather than prose.
+#
+# Prose-only filtering is therefore a real downstream concern, not assumed away
+# by the source.
 
 # %% [C] Peek: render sample articles
 def show(idx: int, head: int = 600) -> None:
@@ -155,14 +160,19 @@ plt.show()
 # Results: 39,651,554 tokens (matching [D]) across 592,840 unique types. Short
 # buckets are the expected Zipf function words (`the`, `of`, `in`, `and`). The
 # per-length view's real payoff is quantifying the table-markup contamination
-# [C] flagged: `right` (195k), `align` (188k), `bgcolor` (186k), and the hex
-# color `fefefe` (70k) rank among the commonest 5-7 letter "words", none of them
-# prose. `references` (157k, section headers) and category-suffix plurals
-# (`establishments`, `politicians`) likewise reflect Wikipedia boilerplate over
-# Simple English usage. Conclusion: raw dumps plus a letter-only split yield a
-# vocabulary whose head is partly structural, reinforcing that prose extraction
-# and filtering are prerequisites for a clean training corpus, not optional
-# polish.
+# [C] flagged: tokens that rank among the commonest of their length yet are not
+# article prose at all.
+#
+# - `right` (195k), `align` (188k), `bgcolor` (186k): wikitext table-cell
+#   attributes.
+# - `fefefe` (70k): the hex color `#FEFEFE`, a table-cell background fill.
+# - `references` (157k): a section header, not body text.
+# - `establishments`, `politicians`, `footballers`: category-suffix plurals from
+#   Wikipedia's stub boilerplate.
+#
+# Conclusion: raw dumps plus a letter-only split yield a vocabulary whose head is
+# partly structural, reinforcing that prose extraction and filtering are
+# prerequisites for a clean training corpus, not optional polish.
 
 # %% [E] Word frequency by length: total word count, commonest words per length
 from collections import Counter, defaultdict
@@ -182,3 +192,25 @@ for w, k in vocab.most_common():
 for length in range(1, 21):
     row = by_len.get(length, [])
     print(f"len {length:2d}: " + "  ".join(f"{w}({k})" for w, k in row))
+
+# %% [markdown]
+# ## TODO: other datasets to explore
+#
+# Simple English Wikipedia is the starting corpus; candidates for future
+# acquisition notebooks, roughly ordered small to large:
+#
+# - **`tiny_shakespeare`**: ~1 MB, a single character stream; the nanoGPT
+#   staple, aligned with the Karpathy zero-to-hero track and trainable in
+#   seconds for quick end-to-end loops.
+# - **`roneneldan/TinyStories`**: synthetic simple-English stories crafted so a
+#   very small model still produces coherent text, well suited to
+#   interpretability toys where the model must be tractable.
+# - **`Salesforce/wikitext` (`wikitext-103-raw-v1`)**: the standard word-level
+#   language-modeling benchmark, useful for checking perplexity against
+#   published numbers.
+# - **`wikimedia/wikipedia` (`20231101.en`)**: same loader and schema as this
+#   notebook, roughly 40x larger, for when scale rather than iteration speed is
+#   the point.
+# - **`HuggingFaceFW/fineweb-edu`**: large-scale filtered web text, the
+#   realistic pretraining corpus to graduate to once the pipeline (including the
+#   prose extraction motivated above) is solid.
