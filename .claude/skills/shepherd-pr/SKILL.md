@@ -45,3 +45,9 @@ the first Address.
      is armed.
 
 4. **Close.** On merge or close, send a final PushNotification. Do not re-arm — shepherding is done.
+
+   - On **merge**, reset the workspace to the freshly-merged base branch so the next task starts
+     clean: switch off the merged branch, fetch, and fast-forward the base to its remote tip (see
+     [reference.md](reference.md)). On close-without-merge, leave the branch in place.
+   - Done when the final PushNotification is sent and — if merged — the workspace sits on an
+     up-to-date base branch.
