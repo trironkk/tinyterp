@@ -34,3 +34,6 @@ start a step before the previous one's criterion is met.
 - Collaboration stays implicit: decisions appear as recorded rationale ("min/max error
   bars were evaluated and rejected"), never as attributed dialogue ("Steering:", "the
   user asked").
+- Diagnostic prints use the self-documenting f-string form `print(f"{expr=}")` so every
+  logged value is prefixed by the code that generated it; format specs go after the `=`
+  (`f"{diff=:.2e}"`). Prose conclusions and tables are exempt.
