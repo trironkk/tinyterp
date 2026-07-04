@@ -1,6 +1,7 @@
 """Device selection: pick the best available torch backend.
 
-Graduated from `notebooks/2026-07-03_hardware_detection.py`.
+References:
+    - notebooks/2026-07-03_hardware_detection.py
 """
 
 import torch

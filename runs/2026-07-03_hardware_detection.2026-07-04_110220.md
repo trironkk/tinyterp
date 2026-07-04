@@ -74,19 +74,17 @@ torch.backends.cuda.matmul.allow_tf32=False
 The `override` flag exists for benchmarking: comparing backends requires
 pinning each side explicitly ([F] uses it for the CPU baseline).
 
-Graduated to `tinyterp/device.py`; imported here rather than redefined.
-
 ```python
-from tinyterp import get_device
+import tinyterp
 
-device = get_device()
+device = tinyterp.get_device()
 print(f"{device=}")
-print(f"{get_device('cpu')=}")
+print(f"{tinyterp.get_device('cpu')=}")
 ```
 
 ```
 device=device(type='cuda')
-get_device('cpu')=device(type='cpu')
+tinyterp.get_device('cpu')=device(type='cpu')
 ```
 
 **[E] Correctness & precision test.** Verifies the selected device computes
@@ -190,7 +188,7 @@ def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
 
 sizes = [256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192]
 backends = ["cpu"] if device.type == "cpu" else ["cpu", device.type]
-results = {be: [matmul_tflops(get_device(be), n) for n in sizes] for be in backends}
+results = {be: [matmul_tflops(tinyterp.get_device(be), n) for n in sizes] for be in backends}
 
 for be in backends:
     means = [sum(s) / len(s) for s in results[be]]
@@ -211,8 +209,12 @@ plt.show()
 ```
 
 ```
- cpu: n=256:   0.547  n=384:   0.553  n=512:   0.592  n=768:   0.622  n=1024:   0.848  n=1536:   0.660  n=2048:   0.773  n=3072:   0.729  n=4096:   0.736  n=6144:   0.806  n=8192:   0.818
-cuda: n=256:   0.730  n=384:   2.229  n=512:   4.322  n=768:   6.926  n=1024:   8.852  n=1536:  14.059  n=2048:   1.896  n=3072:  15.560  n=4096:  16.697  n=6144:  15.601  n=8192:  17.784
+ cpu: n=256:   0.556  n=384:   0.557  n=512:   0.935  n=768:   1.038  n=1024:   0.628  n=1536:   0.661  n=2048:   0.772  n=3072:   0.732  n=4096:   0.749  n=6144:   0.815  n=8192:   0.822
+cuda: n=256:   0.764  n=384:   2.237  n=512:   3.879  n=768:   8.396  n=1024:   9.536  n=1536:  14.048  n=2048:   1.924  n=3072:  15.738  n=4096:  16.733  n=6144:  15.678  n=8192:  17.843
 ```
 
-![png](2026-07-03_hardware_detection.2026-07-04_102022_files/2026-07-03_hardware_detection.2026-07-04_102022_10_1.png)
+![png](2026-07-03_hardware_detection.2026-07-04_110220_files/2026-07-03_hardware_detection.2026-07-04_110220_10_1.png)
+
+## Changelog
+
+- Graduated `get_device()` to `tinyterp/device.py`.
