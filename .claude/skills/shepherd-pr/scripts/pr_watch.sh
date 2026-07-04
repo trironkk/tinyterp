@@ -20,11 +20,24 @@ set -u
 REPO="$1"
 PR="$2"
 SINCE="${3:-}"
-INTERVAL="${WATCH_INTERVAL:-90}"
+INTERVAL="${WATCH_INTERVAL:-30}"
 API="https://api.github.com/repos/$REPO/pulls/$PR"
 
+# Token is optional: outside a sandbox, GITHUB_TOKEN/GH_TOKEN or `gh auth token`
+# authenticates; inside a sandbox the proxy injects credentials for bare curl.
+TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+[ -z "$TOKEN" ] && TOKEN="$(gh auth token 2>/dev/null || true)"
+
+gh_curl() {
+  if [ -n "$TOKEN" ]; then
+    curl -sS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "$@"
+  else
+    curl -sS -H "Accept: application/vnd.github+json" "$@"
+  fi
+}
+
 updated_at() {
-  curl -sS -H "Accept: application/vnd.github+json" "$API" 2>/dev/null \
+  gh_curl "$API" 2>/dev/null \
     | python3 -c 'import sys,json; print(json.load(sys.stdin)["updated_at"])' 2>/dev/null
 }
 

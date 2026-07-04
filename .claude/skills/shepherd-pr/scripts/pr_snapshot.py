@@ -5,19 +5,38 @@ Usage: pr_snapshot.py <owner/repo> <pr-number>
 
 Every human-meaningful update (CI checks, reviews, comments, merge state, new
 commits) changes at least one line, so a plain diff against the prior snapshot
-detects activity. api.github.com auth is injected by the sandbox proxy, so no
-token is needed.
+detects activity. Auth is optional: outside a sandbox it uses GITHUB_TOKEN /
+GH_TOKEN or `gh auth token`; inside a sandbox the proxy injects credentials for
+the bare request.
 """
 
 import json
+import os
+import subprocess
 import sys
 import urllib.request
 
 
+def _token():
+    t = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not t:
+        try:
+            t = subprocess.run(
+                ["gh", "auth", "token"], capture_output=True, text=True, timeout=5
+            ).stdout.strip()
+        except Exception:
+            t = ""
+    return t
+
+
+TOKEN = _token()
+
+
 def get(api, path):
-    req = urllib.request.Request(
-        f"{api}{path}", headers={"Accept": "application/vnd.github+json"}
-    )
+    headers = {"Accept": "application/vnd.github+json"}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
+    req = urllib.request.Request(f"{api}{path}", headers=headers)
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 

@@ -18,31 +18,28 @@ Keep **exactly one watcher**. Each session response re-arms a fresh one (no `SIN
 `updated_at` after the response landed) — that is what stops the session from waking on its own
 work: the response sits at the new gate, not after it.
 
-## GitHub auth
+## GitHub auth (sandbox and outside)
 
-The sandbox proxy injects credentials for github.com HTTPS traffic; `gh` is **not** logged in
-(`gh auth status` reports logged-out — expected, not a failure).
+`pr_watch.sh` and `pr_snapshot.py` authenticate in whichever environment they run: they use
+`GITHUB_TOKEN` / `GH_TOKEN` if set, else fall back to `gh auth token`, and send it as a bearer
+token. If none is found the calls go out bare — which still works inside a sandbox (see below) and
+for public repos anywhere.
 
-- Read/write the API with curl: `curl -H "Accept: application/vnd.github+json" https://api.github.com/…`
-  (POST with `-d @body.json` to open PRs, post replies, etc.).
-- Push over HTTPS, naming the URL explicitly — SSH remotes fail in-sandbox:
-  `git push https://github.com/<owner>/<repo>.git <branch>`.
-- Force-push after an amend uses an explicit lease, since the push-URL tracking ref goes stale:
-  `git push --force-with-lease=<branch>:<remote-sha> https://github.com/<owner>/<repo>.git <branch>`.
+- **Outside a sandbox:** `gh auth login` (or export `GITHUB_TOKEN`) and everything works with your
+  normal credentials — the scripts pick the token up, and plain `git push` / `gh pr` handle writes.
+- **Inside this sandbox:** the proxy injects credentials for github.com HTTPS traffic, so bare curl
+  and `git push https://github.com/<owner>/<repo>.git <branch>` just work; `gh` is **not** logged
+  in (`gh auth status` reports logged-out — expected) and SSH remotes fail, so name the HTTPS URL
+  explicitly. Force-push after an amend needs an explicit lease (the push-URL tracking ref goes
+  stale): `git push --force-with-lease=<branch>:<remote-sha> https://github.com/<owner>/<repo>.git <branch>`.
+
+Read/write the REST API with curl (`POST -d @body.json` to open PRs and post replies, `PATCH` the
+PR body); add `-H "Authorization: Bearer $TOKEN"` when a token is available.
 
 ## Reply to a review thread
 
 `POST /repos/<owner/repo>/pulls/<pr>/comments/<comment_id>/replies` with `{"body": "…"}`.
 Get the `<comment_id>`s from `GET …/pulls/<pr>/comments`.
-
-## Notebook run records
-
-Changing a notebook's **code cells** stales its `runs/` record; the pre-commit hook and CI
-(`scripts/check_runs.py`) block the commit until it is re-recorded. `make record NB=<nb>`
-executes the notebook wherever it runs — the GPU-less sandbox yields a CPU-only record that
-drops the GPU diagnostics the notebook is about. So re-record on the **GPU host** (direct mode
-surfaces the new file back into the sandbox worktree), then commit. Notebook edits that touch
-only markdown/prose cells do not change code cells and need no re-record.
 
 ## Follow-up vs amend
 

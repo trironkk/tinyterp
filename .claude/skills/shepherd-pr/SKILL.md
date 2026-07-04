@@ -35,7 +35,7 @@ the first Address.
 
    - Fetch: `GET /repos/<owner/repo>/pulls/<pr>/comments`.
    - Apply each requested change and verify it (run the affected code or repo checks, not just
-     eyeball it). A changed notebook *code* cell stales its run record — see reference.md.
+     eyeball it).
    - Commit as a follow-up (never amend a reviewed PR), push over HTTPS, reply to each thread
      citing the commit sha.
    - Re-arm: launch a fresh `pr_watch.sh` with no SINCE — it reads `updated_at` after your push,
