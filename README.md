@@ -48,6 +48,7 @@ Record a full notebook run in `runs/` for posterity (committed, unlike `artifact
 ```sh
 uv run jupytext --to ipynb --output - notebooks/<file>.py |
   uv run jupyter nbconvert --stdin --execute --to markdown --output-dir runs --output "<file>.$(date +%F)"
+uv run --only-group lint mdformat runs/
 ```
 
 ## Curriculum

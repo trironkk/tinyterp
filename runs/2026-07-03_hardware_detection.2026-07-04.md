@@ -3,7 +3,6 @@
 **Objective.** Characterize the compute available on this machine, verify
 that torch drives it correctly, and quantify delivered matmul throughput.
 
-
 ```python
 import platform
 import time
@@ -19,12 +18,12 @@ print(f"{torch.__version__=}")
 print(f"{torch.initial_seed()=}")
 ```
 
-    platform.platform()='Linux-6.18.33.1-microsoft-standard-WSL2-x86_64-with-glibc2.43'
-    platform.python_version()='3.12.13'
-    torch.__version__='2.12.1+cu130'
-    torch.initial_seed()=0
-
-
+```
+platform.platform()='Linux-6.18.33.1-microsoft-standard-WSL2-x86_64-with-glibc2.43'
+platform.python_version()='3.12.13'
+torch.__version__='2.12.1+cu130'
+torch.initial_seed()=0
+```
 
 ```python
 print(f"{torch.backends.cuda.is_built()=}")
@@ -34,11 +33,12 @@ if torch.cuda.is_available():
     print(f"{torch.cuda.device_count()=}")
 ```
 
-    torch.backends.cuda.is_built()=True
-    torch.cuda.is_available()=True
-    torch.version.cuda='13.0'
-    torch.cuda.device_count()=1
-
+```
+torch.backends.cuda.is_built()=True
+torch.cuda.is_available()=True
+torch.version.cuda='13.0'
+torch.cuda.device_count()=1
+```
 
 **[C] Additional CUDA diagnostic details.** Compute capability determines
 the dtype regime: bf16 and TF32 (tensor-core float32 matmuls) require
@@ -46,7 +46,6 @@ Ampere (8.0+). TF32 capability is a hardware fact; whether matmuls use it
 is a runtime switch (`torch.backends.cuda.matmul.allow_tf32`, off by
 default since torch 1.12). Both are recorded; [E] measures the accuracy
 consequence of the switch.
-
 
 ```python
 if torch.cuda.is_available():
@@ -61,21 +60,21 @@ if torch.cuda.is_available():
     print(f"{torch.backends.cuda.matmul.allow_tf32=}")
 ```
 
-    props.name='NVIDIA GeForce RTX 5060 Ti'
-    props.total_memory / 2**30=15.9 GiB
-    cc=(12, 0)
-    props.multi_processor_count=36
-    torch.cuda.is_bf16_supported()=True
-    cc >= (8, 0)=True  # tf32 capable
-    torch.backends.cuda.matmul.allow_tf32=False
-
+```
+props.name='NVIDIA GeForce RTX 5060 Ti'
+props.total_memory / 2**30=15.9 GiB
+cc=(12, 0)
+props.multi_processor_count=36
+torch.cuda.is_bf16_supported()=True
+cc >= (8, 0)=True  # tf32 capable
+torch.backends.cuda.matmul.allow_tf32=False
+```
 
 **[D] `get_device()`.** Selects the best available backend (cuda, else cpu).
 The `override` flag exists for benchmarking: comparing backends requires
 pinning each side explicitly ([F] uses it for the CPU baseline).
 
 TODO: graduate to `tinyterp/device.py`.
-
 
 ```python
 def get_device(override: str | None = None) -> torch.device:
@@ -92,9 +91,10 @@ print(f"{device=}")
 print(f"{get_device('cpu')=}")
 ```
 
-    device=device(type='cuda')
-    get_device('cpu')=device(type='cpu')
-
+```
+device=device(type='cuda')
+get_device('cpu')=device(type='cpu')
+```
 
 **[E] Correctness & precision test.** Verifies the selected device computes
 correctly, not merely without error.
@@ -120,7 +120,6 @@ accepts fp32 noise while rejecting a silent TF32 downgrade and outright
 breakage (O(1)). `allclose` defaults are unsuitable here: near-zero output
 elements fall back on `atol=1e-8`, which trips on ordinary fp32 noise.
 
-
 ```python
 def max_matmul_diff(trials: int = 5, n: int = 256) -> float:
     """Worst max-abs-diff between device and CPU matmul across trials."""
@@ -145,10 +144,11 @@ assert fp32_diff < 1e-4, "device result diverges from CPU beyond fp32 noise"
 print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 ```
 
-    fp32_diff=2.86e-05
-    tf32_diff=2.40e-02
-    matmul on cuda matches CPU within fp32 tolerance (1e-4)
-
+```
+fp32_diff=2.86e-05
+tf32_diff=2.40e-02
+matmul on cuda matches CPU within fp32 tolerance (1e-4)
+```
 
 **[F] Matmul throughput benchmark.** An n×n matmul costs 2n³ FLOPs; timing
 across sizes yields TFLOP/s per backend.
@@ -176,7 +176,6 @@ Results (fp32): CPU plateaus near 1 TFLOP/s across the sweep; the RTX 5060
 Ti climbs steeply to n≈1536 and flattens at 15–18 TFLOP/s (~20× once
 saturated). At n=256 the backends are nearly tied: launch overhead swamps
 the ~33 μs of GPU work, so small workloads do not automatically win on GPU.
-
 
 ```python
 def matmul_tflops(dev: torch.device, n: int, reps: int = 20) -> list[float]:
@@ -218,12 +217,9 @@ ax.legend()
 plt.show()
 ```
 
-     cpu: n=256:   0.545  n=384:   0.556  n=512:   0.586  n=768:   0.631  n=1024:   0.645  n=1536:   0.665  n=2048:   0.728  n=3072:   0.754  n=4096:   0.755  n=6144:   0.812  n=8192:   0.831
-    cuda: n=256:   0.584  n=384:   1.996  n=512:   2.301  n=768:   7.657  n=1024:   8.954  n=1536:  14.149  n=2048:   5.778  n=3072:  15.431  n=4096:  16.699  n=6144:  15.503  n=8192:  17.685
+```
+ cpu: n=256:   0.545  n=384:   0.556  n=512:   0.586  n=768:   0.631  n=1024:   0.645  n=1536:   0.665  n=2048:   0.728  n=3072:   0.754  n=4096:   0.755  n=6144:   0.812  n=8192:   0.831
+cuda: n=256:   0.584  n=384:   1.996  n=512:   2.301  n=768:   7.657  n=1024:   8.954  n=1536:  14.149  n=2048:   5.778  n=3072:  15.431  n=4096:  16.699  n=6144:  15.503  n=8192:  17.685
+```
 
-
-
-    
 ![png](2026-07-03_hardware_detection.2026-07-04_files/2026-07-03_hardware_detection.2026-07-04_10_1.png)
-    
-
