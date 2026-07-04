@@ -26,3 +26,5 @@ drive the keyboard, but every step is collaborative and the user interrogates th
 
 - `uv` for everything (`uv run …`); Python pinned to 3.12.
 - Keep code device-agnostic.
+- Markdown is formatted with `mdformat` (checked in CI). After editing `.md` files, run
+  `git ls-files '*.md' | xargs uv run --only-group lint mdformat`.

@@ -14,3 +14,8 @@ dependencies = [
 dev = [
     "ipykernel",
 ]
+lint = [
+    "mdformat",
+    "mdformat-gfm",
+    "mdformat-frontmatter",
+]

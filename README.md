@@ -4,54 +4,59 @@ A personal repository for project-based mechanistic interpretability exploration
 
 ## Layout
 
-| Path | Purpose |
-|------|---------|
-| `notebooks/` | Experiments and exploration notebooks. |
-| `tinyterp/` | The package. Settled code graduates here from notebooks. |
+| Path         | Purpose                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------- |
+| `notebooks/` | Experiments and exploration notebooks.                                                       |
+| `tinyterp/`  | The package. Settled code graduates here from notebooks.                                     |
 | `artifacts/` | Gitignored. Checkpoints, tokenizers, plots. Notebooks load from here rather than retraining. |
-| `data/` | Gitignored. Downloaded datasets and caches. |
+| `data/`      | Gitignored. Downloaded datasets and caches.                                                  |
 
 ## Curriculum
 
-Engineering
-[ ] Dependency management
-[ ] Hardware detection
-[ ] Training data acquisition
+### Engineering
 
-Fundamentals & Theory
-[ ] Matrix multiplication
-[ ] Softmax
-[ ] Tokenization
-[ ] Cross-entropy
-[ ] Backpropagation
-[ ] Optimization (SGD → Adam)
+- [ ] Dependency management
+- [ ] Hardware detection
+- [ ] Training data acquisition
 
-Transformer
-[ ] Attention
-[ ] Network architecture
-[ ] Training
-[ ] Evaluation
-[ ] Sampling
+### Fundamentals & Theory
 
-Post-training
-[ ] Reward model
-[ ] Preference optimization
+- [ ] Matrix multiplication
+- [ ] Softmax
+- [ ] Tokenization
+- [ ] Cross-entropy
+- [ ] Backpropagation
+- [ ] Optimization (SGD → Adam)
 
-Interpretability
-[ ] Probe attention patterns
-[ ] Probe induction heads
-[ ] Probe embeddings
-[ ] Probe logits
-[ ] Circuits
-    [ ] Activation patching
-    [ ] Circuit tracing
-[ ] Superposition toy model
-[ ] Sparse Autoencoders
-    [ ] Training
-    [ ] Feature interpretation
+### Transformer
+
+- [ ] Attention
+- [ ] Network architecture
+- [ ] Training
+- [ ] Evaluation
+- [ ] Sampling
+
+### Post-training
+
+- [ ] Reward model
+- [ ] Preference optimization
+
+### Interpretability
+
+- [ ] Probe attention patterns
+- [ ] Probe induction heads
+- [ ] Probe embeddings
+- [ ] Probe logits
+- [ ] Circuits
+  - [ ] Activation patching
+  - [ ] Circuit tracing
+- [ ] Superposition toy model
+- [ ] Sparse Autoencoders
+  - [ ] Training
+  - [ ] Feature interpretation
 
 ## Resources
 
-* https://karpathy.ai/zero-to-hero.html
-* https://www.3blue1brown.com/?topic=neural-networks
-* https://colah.github.io/
+- https://karpathy.ai/zero-to-hero.html
+- https://www.3blue1brown.com/?topic=neural-networks
+- https://colah.github.io/
