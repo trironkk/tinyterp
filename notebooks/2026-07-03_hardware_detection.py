@@ -3,8 +3,6 @@
 #
 # **Objective.** Characterize the compute available on this machine, verify
 # that torch drives it correctly, and quantify delivered matmul throughput.
-# Product: `get_device()`, the device-selection helper subsequent notebooks
-# initialize from.
 
 # %% [A] Imports
 import platform
@@ -126,7 +124,7 @@ print(f"matmul on {device} matches CPU within fp32 tolerance (1e-4)")
 # window and share the prevailing GPU state, so per-size spread reflects
 # short-term jitter only, not run-to-run variance.
 #
-# Observed anomaly: a recurring ~3× throughput dip at n=2048 in some runs,
+# Note: Observed a recurring ~3× throughput dip at n=2048 in some runs,
 # absent in others. Not a size effect: the sweep's timing is deterministic, so
 # a periodic external GPU load (the WDDM scheduler time-slices this GPU
 # between CUDA and the Windows desktop under WSL2; VS Code renders through it)
