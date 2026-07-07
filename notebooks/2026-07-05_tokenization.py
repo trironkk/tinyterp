@@ -304,27 +304,27 @@ big_tokens = len(encode(big_text, big_vocab))
 print(f"compression ratio = {big_bytes / big_tokens:.2f} bytes/token")
 
 # %% [markdown]
-# **[F] Full corpus: train, tokenize, persist.** Train on the entire corpus with the
-# incremental trainer at vocab 1024, run a full tokenization pass to measure corpus-wide
-# compression, inspect the learned vocabulary, and save it to artifacts/ so later notebooks
-# load the tokenizer instead of retraining.
-# %% [F] Full corpus: train at vocab 1024, analyze the vocabulary, persist
-import pickle
-from pathlib import Path
-
+# **[F] Full corpus: train and analyze.** Train on the entire corpus with the incremental
+# trainer at vocab 2048, measure corpus-wide compression at several vocab sizes, and inspect
+# the learned vocabulary. Merges are learned in order, so the smaller vocabularies are prefixes
+# of the trained one and a single training run covers them all.
+# %% [F] Full corpus: train at vocab 2048, compression per size, analyze
 full_text = "\n\n".join(wiki_articles["text"])  # the entire corpus as one string
-full_vocab_size = 1024
+full_vocab_size = 2048
 start = time.perf_counter()
 full_vocab, full_merges = train_bpe_incremental(full_text, full_vocab_size)
 print(f"trained vocab={len(full_vocab)} on {len(full_text)} chars in {time.perf_counter() - start:.0f}s")
 
-# Full tokenization pass across the corpus. Deduplicated by word: the token count equals
-# encoding every occurrence, but each distinct word is tokenized once.
+# Compression at several vocab sizes. A smaller vocabulary is the first N ids of the trained
+# one; truncate to that size and tokenize the corpus (deduplicated by word: each distinct word
+# is tokenized once, so the token count equals encoding every occurrence).
 full_word_freqs = Counter(tuple(word.encode("utf-8")) for word in GPT2_PATTERN.findall(full_text))
-tokenize = build_tokenizer(full_vocab)
-full_tokens = sum(len(tokenize(word)) * count for word, count in full_word_freqs.items())
 full_bytes = len(full_text.encode("utf-8"))
-print(f"corpus: {full_bytes} bytes, {full_tokens} tokens, {full_bytes / full_tokens:.2f} bytes/token")
+for size in [512, 1024, 1536, 2048]:
+    vocab_n = {token_id: token for token_id, token in full_vocab.items() if token_id < size}
+    tokenize = build_tokenizer(vocab_n)
+    tokens = sum(len(tokenize(word)) * count for word, count in full_word_freqs.items())
+    print(f"vocab {size}: {tokens} tokens, {full_bytes / tokens:.2f} bytes/token")
 
 # --- analysis of the learned vocabulary ---
 # Token length distribution (bytes per token).
@@ -335,23 +335,20 @@ print("token lengths (bytes -> count):", dict(sorted(length_counts.items())))
 whole_words = [token for token in full_vocab.values() if token.startswith(b" ")]
 print(f"tokens starting with a space (whole words): {len(whole_words)}")
 
-# The longest tokens and the first merges (the most frequent pairs learned).
+# The longest tokens learned.
 longest = sorted(full_vocab.values(), key=len, reverse=True)[:20]
 print("longest tokens:", [token.decode("utf-8", "replace") for token in longest])
-print("first 20 merges:", [full_vocab[256 + i].decode("utf-8", "replace") for i in range(20)])
 
 # Table-markup contamination that survives into the full-corpus vocabulary.
 markers = [b"bgcolor", b"rowspan", b"colspan", b"align", b"fefefe", b"ffffff", b"style", b"px"]
 matched = [token for token in full_vocab.values() if any(m in token for m in markers)]
 print("markup-matching tokens:", sorted(token.decode("utf-8", "replace") for token in matched))
 
-# --- persist for later notebooks ---
-artifacts_dir = Path("artifacts")
-artifacts_dir.mkdir(exist_ok=True)
-tokenizer_path = artifacts_dir / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
-with tokenizer_path.open("wb") as f:
-    pickle.dump({"vocab": full_vocab, "merges": full_merges}, f)
-print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
+# All learned merges, in the order they were learned, 128 per line.
+merge_tokens = [full_vocab[256 + i].decode("utf-8", "replace") for i in range(len(full_merges))]
+print("all merges:")
+for line_start in range(0, len(merge_tokens), 128):
+    print(" ".join(merge_tokens[line_start:line_start + 128]))
 
 # %% [markdown]
 # **[F] Findings.**
@@ -359,9 +356,44 @@ print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
 #   top merges of the whole corpus, and `bgcolor`, `align`, `fefefe`, and `References` all
 #   become tokens. Raw Simple Wiki needs prose extraction, as [C] and the acquisition notebook
 #   warned.
-# - The vocabulary is mostly 2-4 byte subword pieces; the longest tokens are common whole words
+# - The vocabulary is mostly short subword pieces; the longest tokens are common whole words
 #   (` television`, ` September`) alongside markup and stray proper nouns (` Socorro`, from the
 #   asteroid tables).
-# - Corpus-wide compression at vocab 1024 is ~2.3 bytes/token.
-# - The full-corpus train finished in ~5 min via the incremental trainer; the naive train_bpe
+# - Compression improves with vocabulary size but with diminishing returns (see the per-size
+#   numbers above).
+# - The full-corpus train finished in minutes via the incremental trainer; the naive train_bpe
 #   could not have reached this scale.
+
+# %% [markdown]
+# **[G] Persist.** Save the trained tokenizer to artifacts/ (gitignored) and load it back, so
+# later notebooks can restore it without retraining. Smaller vocabularies are prefixes of this
+# one, so a future notebook can truncate rather than retrain.
+# %% [G] Persist: save the tokenizer and load it back
+import pickle
+from pathlib import Path
+
+artifacts_dir = Path("artifacts")
+artifacts_dir.mkdir(exist_ok=True)
+tokenizer_path = artifacts_dir / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
+with tokenizer_path.open("wb") as f:
+    pickle.dump({"vocab": full_vocab, "merges": full_merges}, f)
+print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
+
+with tokenizer_path.open("rb") as f:
+    loaded = pickle.load(f)
+loaded_vocab, loaded_merges = loaded["vocab"], loaded["merges"]
+print(f"loaded vocab={len(loaded_vocab)} merges={len(loaded_merges)}")
+
+# The restored tokenizer matches, and still round-trips text losslessly.
+sample = "The Socorro observatory discovered many minor planets in November."
+restored = decode(encode(sample, loaded_vocab), loaded_vocab)
+print(f"matches trained: {loaded_vocab == full_vocab and loaded_merges == full_merges}")
+print(f"round-trip through loaded tokenizer: {restored == sample}")
+assert loaded_vocab == full_vocab and loaded_merges == full_merges and restored == sample
+
+# %% [markdown]
+# ## TODO
+#
+# - Graduate the BPE tokenizer into the tinyterp/ package: train_bpe / train_bpe_incremental,
+#   build_tokenizer, and encode / decode, so training and inference are importable rather than
+#   living only in this notebook.

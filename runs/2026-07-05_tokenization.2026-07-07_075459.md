@@ -274,7 +274,7 @@ print(f"compression ratio = {raw_bytes / raw_tokens:.2f} bytes/token")
 ```
 
 ```
-trained vocab=512 on 31112 chars in 11.2s
+trained vocab=512 on 31112 chars in 11.1s
 raw_bytes=31251
 raw_tokens=15520
 compression ratio = 2.01 bytes/token
@@ -370,8 +370,8 @@ print(f"compression ratio = {big_bytes / big_tokens:.2f} bytes/token")
 ```
 
 ```
-train_bpe               11.21s
-train_bpe_incremental    0.23s   speedup = 49x
+train_bpe               11.08s
+train_bpe_incremental    0.24s   speedup = 45x
 identical vocab:  True
 identical merges: True
 
@@ -383,28 +383,28 @@ markup-matching tokens: [' align', ' bgcolor']
 compression ratio = 1.89 bytes/token
 ```
 
-**[F] Full corpus: train, tokenize, persist.** Train on the entire corpus with the
-incremental trainer at vocab 1024, run a full tokenization pass to measure corpus-wide
-compression, inspect the learned vocabulary, and save it to artifacts/ so later notebooks
-load the tokenizer instead of retraining.
+**[F] Full corpus: train and analyze.** Train on the entire corpus with the incremental
+trainer at vocab 2048, measure corpus-wide compression at several vocab sizes, and inspect
+the learned vocabulary. Merges are learned in order, so the smaller vocabularies are prefixes
+of the trained one and a single training run covers them all.
 
 ```python
-import pickle
-from pathlib import Path
-
 full_text = "\n\n".join(wiki_articles["text"])  # the entire corpus as one string
-full_vocab_size = 1024
+full_vocab_size = 2048
 start = time.perf_counter()
 full_vocab, full_merges = train_bpe_incremental(full_text, full_vocab_size)
 print(f"trained vocab={len(full_vocab)} on {len(full_text)} chars in {time.perf_counter() - start:.0f}s")
 
-# Full tokenization pass across the corpus. Deduplicated by word: the token count equals
-# encoding every occurrence, but each distinct word is tokenized once.
+# Compression at several vocab sizes. A smaller vocabulary is the first N ids of the trained
+# one; truncate to that size and tokenize the corpus (deduplicated by word: each distinct word
+# is tokenized once, so the token count equals encoding every occurrence).
 full_word_freqs = Counter(tuple(word.encode("utf-8")) for word in GPT2_PATTERN.findall(full_text))
-tokenize = build_tokenizer(full_vocab)
-full_tokens = sum(len(tokenize(word)) * count for word, count in full_word_freqs.items())
 full_bytes = len(full_text.encode("utf-8"))
-print(f"corpus: {full_bytes} bytes, {full_tokens} tokens, {full_bytes / full_tokens:.2f} bytes/token")
+for size in [512, 1024, 1536, 2048]:
+    vocab_n = {token_id: token for token_id, token in full_vocab.items() if token_id < size}
+    tokenize = build_tokenizer(vocab_n)
+    tokens = sum(len(tokenize(word)) * count for word, count in full_word_freqs.items())
+    print(f"vocab {size}: {tokens} tokens, {full_bytes / tokens:.2f} bytes/token")
 
 # --- analysis of the learned vocabulary ---
 # Token length distribution (bytes per token).
@@ -415,36 +415,75 @@ print("token lengths (bytes -> count):", dict(sorted(length_counts.items())))
 whole_words = [token for token in full_vocab.values() if token.startswith(b" ")]
 print(f"tokens starting with a space (whole words): {len(whole_words)}")
 
-# The longest tokens and the first merges (the most frequent pairs learned).
+# The longest tokens learned.
 longest = sorted(full_vocab.values(), key=len, reverse=True)[:20]
 print("longest tokens:", [token.decode("utf-8", "replace") for token in longest])
-print("first 20 merges:", [full_vocab[256 + i].decode("utf-8", "replace") for i in range(20)])
 
 # Table-markup contamination that survives into the full-corpus vocabulary.
 markers = [b"bgcolor", b"rowspan", b"colspan", b"align", b"fefefe", b"ffffff", b"style", b"px"]
 matched = [token for token in full_vocab.values() if any(m in token for m in markers)]
 print("markup-matching tokens:", sorted(token.decode("utf-8", "replace") for token in matched))
 
-# --- persist for later notebooks ---
-artifacts_dir = Path("artifacts")
-artifacts_dir.mkdir(exist_ok=True)
-tokenizer_path = artifacts_dir / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
-with tokenizer_path.open("wb") as f:
-    pickle.dump({"vocab": full_vocab, "merges": full_merges}, f)
-print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
+# All learned merges, in the order they were learned, 128 per line.
+merge_tokens = [full_vocab[256 + i].decode("utf-8", "replace") for i in range(len(full_merges))]
+print("all merges:")
+for line_start in range(0, len(merge_tokens), 128):
+    print(" ".join(merge_tokens[line_start:line_start + 128]))
 ```
 
 ```
-trained vocab=1024 on 267960633 chars in 310s
+trained vocab=2048 on 267960633 chars in 704s
 
 
-corpus: 269517814 bytes, 116178598 tokens, 2.32 bytes/token
-token lengths (bytes -> count): {1: 256, 2: 217, 3: 244, 4: 145, 5: 78, 6: 36, 7: 29, 8: 8, 9: 6, 10: 3, 11: 2}
-tokens starting with a space (whole words): 331
-longest tokens: [' television', ' politician', 'References', ' September', ' establish', ' American', ' websites', ' football', ' December', ' November', ' February', ' bgcolor', ' Socorro', 'eptember', 'American', ' October', ' January', 'resident', 'iversity', 'erences']
-first 20 merges: ['he', ' t', ' a', 'in', 'er', 'an', 'on', 'or', ' the', 'es', '||', 'is', 'en', 'ar', 'at', 'ed', ' o', ' w', ' ||', ' s']
-markup-matching tokens: [' align', ' bgcolor', 'fefefe']
-saved artifacts/tokenizer_simplewiki_v1024.pkl (16604 bytes)
+vocab 512: 142754446 tokens, 1.89 bytes/token
+
+
+vocab 1024: 116178598 tokens, 2.32 bytes/token
+
+
+vocab 1536: 105876091 tokens, 2.55 bytes/token
+
+
+vocab 2048: 99708369 tokens, 2.70 bytes/token
+token lengths (bytes -> count): {1: 256, 2: 343, 3: 437, 4: 372, 5: 263, 6: 166, 7: 97, 8: 61, 9: 24, 10: 14, 11: 10, 13: 3, 14: 1, 15: 1}
+tokens starting with a space (whole words): 889
+longest tokens: [' establishments', ' International', ' municipality', ' Championship', ' professional', ' television', ' politician', ' University', 'ternational', ' department', ' California', ' Spacewatch', ' government', ' population', ' footballer', 'References', ' September', ' establish', ' different', ' President']
+markup-matching tokens: [' align', ' bgcolor', 'colspan', 'fefefe', 'rowspan']
+all merges:
+he  t  a in er an on or  the es || is en ar at ed  o  w  ||  s al it  b  of  in ic  c  f re as nd  p  1 ro  S  m  and le  A ing  d ou  T ion  C  2 ol ig  (  M il  to am  is  h om us ent id el  P �  I  19  B  H ct 00  L  was et ad st  � ch  l  n ir em iv ay  al ers ot ef ur  F  N  D  The  R ist  th  re th  G  g op im ov  J  on ce un ht  for ow  W  E  k ian ber ly 19 ation rom ag and ight  — ut ies |- ra  st  
+  be  from
+ O  K oc  as  e nt ia ign um  200  20 ces os ul mer  U  by art ith col  an right ter ak  It ep od ish av ev ican  |  are color gcolor  align =#  bgcolor  km  with eb  at  v ity ain  St  He  pl  com 's ap  wh if eren  that est ther ab ill The erences ew Ref References ip eop  it ary up  or ec ember merican eople ard  " ac  V res 20  he ld ng ust all  pro  Ch ment ect  201 ug ud  – ear ant rit ort ong  199  3 ame ate ub  - ich orn ri og  con ere  Un ount  ch  mov ran eat se ge ie ast  people EA  his ern  play so ore  Soc
+ue ive ord orro ry ost  us  In  act our man ok IN land ated ial ey ine EAR  Socorro  LIN  LINEAR  18 her ited  American ), ates sit ver own  also ork sp  4  Y  has  sp  sh  un  Mar ave lish  were ell ors ebsit  Th ack irst uary  ex  websit  not  y age ome ik  5 ions ical  bir du  bec ure ide ). 200 ths  United eath  comp out iver  which  ab ff  Al  first ational –  can Other any amp  7 ory  198 efe fe fefe ond fefefe iz ice  websites oot les ex ren  have  births ied ang  States  6  8 ach ph ball aw  ar ound end ne ck per ept olit fter ician  part qu eg  Sp    ous ob
+ 197 to rs  ro ts  one ober  New ss 18 199 te  they cl der  had  cl  9 ision  ser  ra aus orld ree  kn ood eptember  j mun io ass American  death  other ics  their port ib ater ade sh  Ar  September  She ime row ean ootball ild  who  Le  name In ric  se lect pp ll  17  year ton  
+ 
+  196  but  tw ward ally ral  2000 ounty ace é son tion mp nce ress  call uch ident old ah  her  time outh  Fran erman  Jan 201 oh ctober ark  known  about  movies are ased orm ake  this ould iving ind ook ings  Eng orth  polit  October low ments  used  movie  10  They  2001 ram  te lev  dis 21 ists  mus  called ugust  16 =" pri
+ This  March  Sh ance  work  some ten ock ince born one ities oy  made erson  15  after  sing ted  two als  deaths  January  August ult ations   198  le ina oug ick ire clud und  194  195 ans ite  sc  Nov  football  de  most  May  song  its  Dec  many tle irect we uring  born wn red ile  Z 22  includ ery rent  ad apan ition ages  writ  14  German  December  there vent  November  Ind  been pril  tra ns arge ames  city  telev atch  193 lic gan  television roup ebr ike az overn ause ebruary  into mon span  Aust  r  found  cont  ag  all  died ool ague  13  more  im me  ac  count ury resident  April ru ays my iss raph iversit  11  when ms  12  up ife  February
+une  politician ens  direct  pop  Jul nc ft  per ix 197 bum pl ablish |||| ritish  Com  she  est ty  cent ail ale  team ash  County  live  col umber  off  Japan  app  bet  over  became  World  reg ublic  Con inist  out  Pri ins Living iversity ase ction ason arri 10 reat  fam  do cer  years  1999  member form  elect tern  Is  commun 17  new ily  France vel 
+
+  actors  album igh  series ier icip  rec  produ yp  group  July tic  Pro ve  pri  ph  War  popul  Sc  number  played  Col  sy  establish  dist  South resent inal  2002  York ner na  Joh  King  rele eral  so  dif arl ative  only aj  dep uth  than ween  As 23 ath ient  like ning  sec oth  start  him ose  North  League ugh
+anad icial olog able  bu  player  And  English uk  large 16  make rict rench uc 15 ouse rough  stud  state  British sc  June ved ". hip ever rist air ee 196  Eur uss way ures  between angu  them  gen rib icipal  because ai  University  Cl de hool oman  place unicipal ars  co  go  bl  diffe  again 14 13 ks  City  po  during  Q  Cal eak  north  where  show ron ting  Ph til other  man ism  Bl  very       An 25  pre side  Pal  would  end  spec  players ital ica  may  won Ch  creat  2020 artment ys  Austral  such ope  mean  Ital "| ax med ually  town  qu 24  person  music aid  rel ough  released 28 ious con ned mb  Europe  establishments  sm ual  Rep 26  under ium 30
+29  At Com ternational pen dom  met  River  three 27  24  different  fl ert  high  until  second  sup  long rowspan 000 rop  Part dition  gover  Award ution  will ians  Canad  John  National  main ese arly ines ograph  cap  south ries ven  world ox  later  med hen  then  actor 50  II  ter ters areer eor  book ung  child  Man ta  French fore  govern  1998 go ser  win ds  national  set  age  through arch iet  2003  life  area  President vince  West urg ampions ced  department  histo  25 ley  Af  Fl  Par  songs  Pl 194 au OS  Mon  same  singer ble omen Rel  Russ  small  band  loc its rid  30  Ad  sub  season  former  Bra  four ling cc itt ional ield lymp 11  game lp ls ise  kill  langu  use  2010
+ Space  fol iforn  take ats  art ino sign time  On arac  2004 rian ifornia  His  being reen ject ience ove ring ", ural  Mus  chang People tor fess  well  
+ 
+ 
+ 
+  Car com  mod  back  mon  Party  California  Olymp  There han ney Mov ess ants  pages  record cess  often 195  did  For lo  named  started  get  2005  district iation  rep  no lands  Cent  old  2019 ank ilm  region omar  based  give stem 34 stit ky  before ather ons  Ab  system  Roman á  family  municipal ded ined rt  2017  ret  Palomar  water  Germany  you  said  Minist  Geor  career  own  bro burg Related  Wh  since  Christ  England ane  against  29  form  
+
+ oice 37 12  Kitt  cause  actress 80  commune ondon  Will vice  law  Peak eal owever gy pt  games  trans
+ sur urch  near  air  23 round illion ement  Pol ae ful  2018 cent  Gu gram co very ink watch  2014  26  help  .  charac  typ  follow 36 Movies  any  Ed  21  London by aug EAT  Cup  Spacewatch ham  Afric  government  NEAT ask  ent mper  organ  directed  best ampionship  inter 39 ze  these  28 aul  anim ody 35 wer ara  century He ness  become 40  event  2006 ideo iew  population gs  All gin  rem  27 rd rama  Republic merica  appear uld  &  country  around  including  Some  orig 38  Sw  2016 ross  Kingdom Th  word ony anish  land  comed eed alk  Ser ata  home  both ma  sever  website  America  X  war tra  school  atta  US ö lf  gu  2015 90  could ains  cur ajor ird  Bar 60 ’ ves ny
+rand Un  Mich ke lin On  22 ille act ights aint  190  Japanese  2021 tt  import ales sident 70  marri  Scot  La  build  list ized  Indian  profess  2011 ology  East  each  en  run la ria munes  car  2007 vol cy  Anderson Death ilit ones  usually  lived oin tin  Australia ü  children day  Off  examp tal oard rew  Her cture  sim  hum  Gen  power  Mes ible iam NE  defe writ istan  drama  Mc  last ald  devel  dec ating colspan 99 istrict ger ute  After  created ows zer  rock "|-  Minister ture ctors  Air  began  ob  county lege ipp  several  program  sign "|-||  2013  2008  club  India graph aking  though ower  video  House  You ublish  attack  oper  while  common  gra nal Hist lie ular  inst  writer ummer Communes  vers  '
+ocra í Eng  Italian soc arth  2012  res attle  important 33  suc umb  single  perform  Bel  official  we ilt amb  if 45  million ired  Lou ensus ivision  film ti  Mesa  went  rul ington  open  Pet  El ek hy  Bro  bus  State 
+  
+ 
+  
+ 
+ 
+ 
+   2009 oss ull  Ex  William tes  municipality iction Sta Cities ni  language que zil 95  These fer ence  popular yle  now ó ilitary omb  compose It 47 icians cial  example  Phil 98  Pre 96 Deaths nts 48 ues  capital 97  design History ama ." the times aught  head  countries  early  Hol ried  LO ford  stat  short  president  San  However  ()  2022  Tur  ep west  Sec  compet  Se 46 speople  Be  Ber  groups  west  paint NEOS English  LONEOS  include ockey  Med  day  Ange  office ivil
+ris  join  came van  species  Championship  Govern ..  means  leade  One  Swed mina  written conom riend ridge  Miss  Sch  left ration ead  publish  way rote  Sup  contro wards  Per ication  Charl  general ico  every  1997 
+ 
+  history FA 2000  When ki isod  refer ka ya ided  pass ertain  down  times  inf  manage orts ncy  much  Que  east  Har dy ä  married  women 88 cept  ann  Dav  province 75 oon  what  Canada  cancer  famous  major |||||||| è 65  current  var  comedy  original ps utch uff line  support  still  voice  class iness  dri  professional  activ itle  members ease  1990 duc  river alth view oviet  built  father Sport  1996 eh  School mar  prese  NY  desc ounce  rece  vill  Gree  International Actors  Tex emocra  sold ville  how ush 2010 ography yd anne
+ match itar ived  Rec  producer ered pe ffect 85  does  company  took roduc  largest  public idd east 31 ida yl  Saint  house ius  good  represent  business icago  Mex  moved  wrote urn raft  100 32  another cade  stage  belie  31 66 ael  Port  Paul  footballer  Net itch ournal work  hap rime  third do val  engin  success berg  Italy ext  George  held  son  poin ij 87  title  NYS  arch  body  feat Polit  Pen  China  Louis rest ler aster  lead gress  James  big  result iod  Union  even af  1995  need  close  order  Russian  director  given  comple  proble  Canadian bor  want  Cath  albums  top vers  Kore  deb graphy 94  phys  young ets atural 05  great uthor  political  Texas  Tra  books  Brazil urt isco 86  six  just  Rober  stru oe istics  rad  Its
 ```
 
 **[F] Findings.**
@@ -453,9 +492,51 @@ saved artifacts/tokenizer_simplewiki_v1024.pkl (16604 bytes)
   top merges of the whole corpus, and `bgcolor`, `align`, `fefefe`, and `References` all
   become tokens. Raw Simple Wiki needs prose extraction, as [C] and the acquisition notebook
   warned.
-- The vocabulary is mostly 2-4 byte subword pieces; the longest tokens are common whole words
+- The vocabulary is mostly short subword pieces; the longest tokens are common whole words
   (` television`, ` September`) alongside markup and stray proper nouns (` Socorro`, from the
   asteroid tables).
-- Corpus-wide compression at vocab 1024 is ~2.3 bytes/token.
-- The full-corpus train finished in ~5 min via the incremental trainer; the naive train_bpe
+- Compression improves with vocabulary size but with diminishing returns (see the per-size
+  numbers above).
+- The full-corpus train finished in minutes via the incremental trainer; the naive train_bpe
   could not have reached this scale.
+
+**[G] Persist.** Save the trained tokenizer to artifacts/ (gitignored) and load it back, so
+later notebooks can restore it without retraining. Smaller vocabularies are prefixes of this
+one, so a future notebook can truncate rather than retrain.
+
+```python
+import pickle
+from pathlib import Path
+
+artifacts_dir = Path("artifacts")
+artifacts_dir.mkdir(exist_ok=True)
+tokenizer_path = artifacts_dir / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
+with tokenizer_path.open("wb") as f:
+    pickle.dump({"vocab": full_vocab, "merges": full_merges}, f)
+print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
+
+with tokenizer_path.open("rb") as f:
+    loaded = pickle.load(f)
+loaded_vocab, loaded_merges = loaded["vocab"], loaded["merges"]
+print(f"loaded vocab={len(loaded_vocab)} merges={len(loaded_merges)}")
+
+# The restored tokenizer matches, and still round-trips text losslessly.
+sample = "The Socorro observatory discovered many minor planets in November."
+restored = decode(encode(sample, loaded_vocab), loaded_vocab)
+print(f"matches trained: {loaded_vocab == full_vocab and loaded_merges == full_merges}")
+print(f"round-trip through loaded tokenizer: {restored == sample}")
+assert loaded_vocab == full_vocab and loaded_merges == full_merges and restored == sample
+```
+
+```
+saved artifacts/tokenizer_simplewiki_v2048.pkl (38181 bytes)
+loaded vocab=2048 merges=1792
+matches trained: True
+round-trip through loaded tokenizer: True
+```
+
+## TODO
+
+- Graduate the BPE tokenizer into the tinyterp/ package: train_bpe / train_bpe_incremental,
+  build_tokenizer, and encode / decode, so training and inference are importable rather than
+  living only in this notebook.
