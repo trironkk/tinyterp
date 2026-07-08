@@ -365,42 +365,31 @@ for line_start in range(0, len(merge_tokens), 128):
 #   could not have reached this scale.
 
 # %% [markdown]
-# **[G] Persist.** Save the trained tokenizer to artifacts/ (gitignored) and load it back, so
-# later notebooks can restore it without retraining. Smaller vocabularies are prefixes of this
-# one, so a future notebook can truncate rather than retrain.
+# **[G] Persist.** Save the trained tokenizer to artifacts/ (gitignored) and load it back with
+# `tinyterp.save_tokenizer` / `tinyterp.load_tokenizer`, so later notebooks restore it without
+# retraining. Smaller vocabularies are prefixes of this one, so a future notebook can truncate
+# rather than retrain.
 # %% [G] Persist: save the tokenizer and load it back
-import pickle
 from pathlib import Path
 
-artifacts_dir = Path("artifacts")
-artifacts_dir.mkdir(exist_ok=True)
-tokenizer_path = artifacts_dir / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
-with tokenizer_path.open("wb") as f:
-    pickle.dump({"vocab": full_vocab, "merges": full_merges}, f)
+import tinyterp
+
+tokenizer_path = Path("artifacts") / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
+tinyterp.save_tokenizer(tokenizer_path, full_vocab, full_merges)
 print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
 
-with tokenizer_path.open("rb") as f:
-    loaded = pickle.load(f)
-loaded_vocab, loaded_merges = loaded["vocab"], loaded["merges"]
+loaded_vocab, loaded_merges = tinyterp.load_tokenizer(tokenizer_path)
 print(f"loaded vocab={len(loaded_vocab)} merges={len(loaded_merges)}")
 
-# The restored tokenizer matches, and still round-trips text losslessly.
+# The restored tokenizer matches, and still round-trips text losslessly through the package API.
 sample = "The Socorro observatory discovered many minor planets in November."
-restored = decode(encode(sample, loaded_vocab), loaded_vocab)
+restored = tinyterp.decode(tinyterp.encode(sample, loaded_vocab), loaded_vocab)
 print(f"matches trained: {loaded_vocab == full_vocab and loaded_merges == full_merges}")
 print(f"round-trip through loaded tokenizer: {restored == sample}")
 assert loaded_vocab == full_vocab and loaded_merges == full_merges and restored == sample
 
 # %% [markdown]
 # ## TODO
-#
-# **Graduate to the package**
-# - Graduate the BPE tokenizer (train_bpe / train_bpe_incremental, build_tokenizer, encode /
-#   decode) into tinyterp/, so training and inference are importable, not notebook-only.
-# - Add a one-call `load_tokenizer(path) -> (vocab, merges)` helper and state the
-#   "load, don't retrain" contract inline.
-# - Add a `show_tokenization(text)` inspector that prints token boundaries (decoded tokens
-#   joined by `|`) for eyeballing how a string splits.
 #
 # **Algorithmic enhancements**
 # - Maintain a `pair -> words` index so each merge only re-tokenizes words containing the

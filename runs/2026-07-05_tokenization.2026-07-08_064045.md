@@ -370,13 +370,13 @@ print(f"compression ratio = {big_bytes / big_tokens:.2f} bytes/token")
 ```
 
 ```
-train_bpe               11.08s
-train_bpe_incremental    0.24s   speedup = 45x
+train_bpe               11.07s
+train_bpe_incremental    0.23s   speedup = 49x
 identical vocab:  True
 identical merges: True
 
 
-incremental on 4000 articles (4688996 chars): 9.4s
+incremental on 4000 articles (4688996 chars): 9.6s
 markup-matching tokens: [' align', ' bgcolor']
 
 
@@ -432,7 +432,7 @@ for line_start in range(0, len(merge_tokens), 128):
 ```
 
 ```
-trained vocab=2048 on 267960633 chars in 704s
+trained vocab=2048 on 267960633 chars in 701s
 
 
 vocab 512: 142754446 tokens, 1.89 bytes/token
@@ -500,29 +500,29 @@ ris  join  came van  species  Championship  Govern ..  means  leade  One  Swed m
 - The full-corpus train finished in minutes via the incremental trainer; the naive train_bpe
   could not have reached this scale.
 
-**[G] Persist.** Save the trained tokenizer to artifacts/ (gitignored) and load it back, so
-later notebooks can restore it without retraining. Smaller vocabularies are prefixes of this
+**[G] Persist via the package.** The tokenizer has graduated to `tinyterp/tokenizer.py`, so
+from here the notebook imports it instead of redefining it: the functions built inline above are
+the narrative, and `tinyterp` now holds the settled versions. Save the trained vocab and merges
+to artifacts/ (gitignored) with `tinyterp.save_tokenizer`, load them back with
+`tinyterp.load_tokenizer`, and round-trip through the package's own encode/decode, so later
+notebooks restore the tokenizer without retraining. Smaller vocabularies are prefixes of this
 one, so a future notebook can truncate rather than retrain.
 
 ```python
-import pickle
 from pathlib import Path
 
-artifacts_dir = Path("artifacts")
-artifacts_dir.mkdir(exist_ok=True)
-tokenizer_path = artifacts_dir / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
-with tokenizer_path.open("wb") as f:
-    pickle.dump({"vocab": full_vocab, "merges": full_merges}, f)
+import tinyterp
+
+tokenizer_path = Path("artifacts") / f"tokenizer_simplewiki_v{full_vocab_size}.pkl"
+tinyterp.save_tokenizer(tokenizer_path, full_vocab, full_merges)
 print(f"saved {tokenizer_path} ({tokenizer_path.stat().st_size} bytes)")
 
-with tokenizer_path.open("rb") as f:
-    loaded = pickle.load(f)
-loaded_vocab, loaded_merges = loaded["vocab"], loaded["merges"]
+loaded_vocab, loaded_merges = tinyterp.load_tokenizer(tokenizer_path)
 print(f"loaded vocab={len(loaded_vocab)} merges={len(loaded_merges)}")
 
-# The restored tokenizer matches, and still round-trips text losslessly.
+# The restored tokenizer matches, and still round-trips text losslessly through the package API.
 sample = "The Socorro observatory discovered many minor planets in November."
-restored = decode(encode(sample, loaded_vocab), loaded_vocab)
+restored = tinyterp.decode(tinyterp.encode(sample, loaded_vocab), loaded_vocab)
 print(f"matches trained: {loaded_vocab == full_vocab and loaded_merges == full_merges}")
 print(f"round-trip through loaded tokenizer: {restored == sample}")
 assert loaded_vocab == full_vocab and loaded_merges == full_merges and restored == sample
@@ -537,6 +537,37 @@ round-trip through loaded tokenizer: True
 
 ## TODO
 
-- Graduate the BPE tokenizer into the tinyterp/ package: train_bpe / train_bpe_incremental,
-  build_tokenizer, and encode / decode, so training and inference are importable rather than
-  living only in this notebook.
+**Algorithmic enhancements**
+
+- Maintain a `pair -> words` index so each merge only re-tokenizes words containing the
+  merged pair, removing the per-merge full-corpus scan (the bulk of the ~700s full train).
+- Replace the linear ordered-token scan in `tokenize` with a trie / prefix map for
+  O(match length) longest-prefix match; keep the linear version as the readable reference.
+- Insert the new token into the ordered tokens incrementally instead of re-sorting the whole
+  vocab every merge.
+- In `encode`, dedup by word frequency and reuse a prebuilt tokenizer instead of re-sorting
+  the vocab and re-tokenizing every occurrence.
+- Select the max-count pair with a lazy-deletion max-heap instead of scanning all live pairs;
+  preserve the deterministic (count, pair) tie-break so incremental stays identical to naive.
+- Reserve a special end-of-text token (id above the byte range, never emitted from raw bytes)
+  and inject it between documents in `encode`.
+- Add the empty-`pair_counts` break guard to naive `train_bpe`, so it matches
+  `train_bpe_incremental` on tiny corpora or an oversized vocab_size.
+- Quantify the greedy-vs-merge-replay choice: tokenize the corpus both ways at a fixed vocab
+  and report the bytes/token gap, backing the design decision with a number.
+- Choose vocab size by a criterion (marginal bytes/token gain threshold) rather than the
+  round 2048.
+
+**Forensics & extension**
+
+- Hoist run knobs (seed, sample sizes, vocab targets) to named constants reused across cells.
+- Guard the ~12-min full-corpus train with load-if-exists: restore the artifact when present,
+  retrain only when missing.
+- Save provenance alongside vocab/merges (dataset config, vocab_size, seed, regex pattern,
+  trained_at, format_version); tolerate its absence when loading older files.
+- Add vocab well-formedness assertions: all 256 base bytes present,
+  len(vocab) == 256 + len(merges), each merged token equals the concatenation of its pair's
+  bytes, and bytes/token decreasing as vocab grows.
+- Plot the compression-vs-vocab-size curve from [F]'s per-size numbers.
+- Note how to swap in a different corpus (load_dataset config, sample knobs, artifact suffix),
+  tying to the acquisition notebook's dataset backlog.
