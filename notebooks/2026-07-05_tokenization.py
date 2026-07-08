@@ -394,6 +394,43 @@ assert loaded_vocab == full_vocab and loaded_merges == full_merges and restored 
 # %% [markdown]
 # ## TODO
 #
-# - Graduate the BPE tokenizer into the tinyterp/ package: train_bpe / train_bpe_incremental,
-#   build_tokenizer, and encode / decode, so training and inference are importable rather than
-#   living only in this notebook.
+# **Graduate to the package**
+# - Graduate the BPE tokenizer (train_bpe / train_bpe_incremental, build_tokenizer, encode /
+#   decode) into tinyterp/, so training and inference are importable, not notebook-only.
+# - Add a one-call `load_tokenizer(path) -> (vocab, merges)` helper and state the
+#   "load, don't retrain" contract inline.
+# - Add a `show_tokenization(text)` inspector that prints token boundaries (decoded tokens
+#   joined by `|`) for eyeballing how a string splits.
+#
+# **Algorithmic enhancements**
+# - Maintain a `pair -> words` index so each merge only re-tokenizes words containing the
+#   merged pair, removing the per-merge full-corpus scan (the bulk of the ~700s full train).
+# - Replace the linear ordered-token scan in `tokenize` with a trie / prefix map for
+#   O(match length) longest-prefix match; keep the linear version as the readable reference.
+# - Insert the new token into the ordered tokens incrementally instead of re-sorting the whole
+#   vocab every merge.
+# - In `encode`, dedup by word frequency and reuse a prebuilt tokenizer instead of re-sorting
+#   the vocab and re-tokenizing every occurrence.
+# - Select the max-count pair with a lazy-deletion max-heap instead of scanning all live pairs;
+#   preserve the deterministic (count, pair) tie-break so incremental stays identical to naive.
+# - Reserve a special end-of-text token (id above the byte range, never emitted from raw bytes)
+#   and inject it between documents in `encode`.
+# - Add the empty-`pair_counts` break guard to naive `train_bpe`, so it matches
+#   `train_bpe_incremental` on tiny corpora or an oversized vocab_size.
+# - Quantify the greedy-vs-merge-replay choice: tokenize the corpus both ways at a fixed vocab
+#   and report the bytes/token gap, backing the design decision with a number.
+# - Choose vocab size by a criterion (marginal bytes/token gain threshold) rather than the
+#   round 2048.
+#
+# **Forensics & extension**
+# - Hoist run knobs (seed, sample sizes, vocab targets) to named constants reused across cells.
+# - Guard the ~12-min full-corpus train with load-if-exists: restore the artifact when present,
+#   retrain only when missing.
+# - Save provenance alongside vocab/merges (dataset config, vocab_size, seed, regex pattern,
+#   trained_at, format_version); tolerate its absence when loading older files.
+# - Add vocab well-formedness assertions: all 256 base bytes present,
+#   len(vocab) == 256 + len(merges), each merged token equals the concatenation of its pair's
+#   bytes, and bytes/token decreasing as vocab grows.
+# - Plot the compression-vs-vocab-size curve from [F]'s per-size numbers.
+# - Note how to swap in a different corpus (load_dataset config, sample knobs, artifact suffix),
+#   tying to the acquisition notebook's dataset backlog.
