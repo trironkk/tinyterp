@@ -365,14 +365,11 @@ for line_start in range(0, len(merge_tokens), 128):
 #   could not have reached this scale.
 
 # %% [markdown]
-# **[G] Persist via the package.** The tokenizer has graduated to `tinyterp/tokenizer.py`, so
-# from here the notebook imports it instead of redefining it: the functions built inline above are
-# the narrative, and `tinyterp` now holds the settled versions. Save the trained vocab and merges
-# to artifacts/ (gitignored) with `tinyterp.save_tokenizer`, load them back with
-# `tinyterp.load_tokenizer`, and round-trip through the package's own encode/decode, so later
-# notebooks restore the tokenizer without retraining. Smaller vocabularies are prefixes of this
-# one, so a future notebook can truncate rather than retrain.
-# %% [G] Persist: save and load through the graduated package
+# **[G] Persist.** Save the trained tokenizer to artifacts/ (gitignored) and load it back with
+# `tinyterp.save_tokenizer` / `tinyterp.load_tokenizer`, so later notebooks restore it without
+# retraining. Smaller vocabularies are prefixes of this one, so a future notebook can truncate
+# rather than retrain.
+# %% [G] Persist: save the tokenizer and load it back
 from pathlib import Path
 
 import tinyterp
