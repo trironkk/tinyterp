@@ -8,6 +8,38 @@ description: Fill a notebook's approved skeleton cell by cell in lockstep. Reach
 the cell's markdown description — what it does, why this approach, and the steering that shaped
 it, written as it lands, never backfilled.
 
+## Code trajectory
+
+Default trajectory for any new capability: **naive → demonstrate → optimize.**
+
+1. **Naive first.** Write the obvious version: a single top-to-bottom procedure, one function
+   per genuinely reused primitive, inline `#` section-header comments, no cleverness. It's a
+   teaching artifact — legibility beats speed.
+2. **Demonstrate at small scale.** Run it only at demo scale, to show it works. Do not
+   benchmark or scale-calibrate the naive version: its cost is knowable by inspection, so pick
+   a small size (a handful of items) by reasoning, not by spawning timed runs.
+3. **Optimize on a concrete trigger.** A real corpus, a timing need, or a scale requirement is
+   the explicit trigger to write a *separate* optimized version. Keep the naive one as the
+   reference, and assert the optimized path reproduces it exactly (byte-identical output across
+   the refactor). Benchmark and calibrate only this path — that's where speed matters.
+
+**Front-load known gotchas.** Before optimizing a textbook algorithm, state its subtleties and
+design for them, so you don't rediscover them through expensive runs. (BPE: argmax needs a
+deterministic tie-break for reproducible merges; greedy-longest-match and merge-replay are
+different tokenizers that can diverge.) Bake in, verify once.
+
+**Calibrate cheaply.** Reason about complexity before measuring; estimate, then measure only to
+confirm a decision, not to explore. Batch measurements into one run over several sizes. Compare
+optimized-vs-naive once, at a size where naive is tolerable, then trust the complexity argument
+for larger sizes. Approximate is fine for sizing knobs — don't chase an exact target with
+repeated timed runs.
+
+**Minimize expensive re-runs.** Smoke-test new or edited code at tiny scale before any full
+run. Compute a parameter sweep from one run where structure allows (BPE: train at the max
+vocab; smaller vocabs are merge-order prefixes — truncate, don't retrain). Guard expensive
+training with a load-if-exists check; persist intermediate artifacts. Structure the one
+expensive run to also produce likely follow-ups (multi-size stats, persistence, analysis).
+
 **Review gate.** The last cell has no next cell for "continue" to name, so do not roll into
 shipping. Stop, present the completed notebook, and hold. Build is done only when every cell is
 filled, the logbook is current, and the user has explicitly approved the finished notebook — an
