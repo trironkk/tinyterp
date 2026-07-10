@@ -204,6 +204,10 @@ class CausalSelfAttention(nn.Module):
         # not trained but still follows the module across devices.
         mask = torch.tril(torch.ones(config.block_size, config.block_size)).bool()
         self.register_buffer("causal_mask", mask.view(1, 1, config.block_size, config.block_size))
+        # When set, [C]'s forward stashes the attention weights in `last_attn` for interpretability
+        # (attention patterns, induction heads). Off by default so training holds no extra memory;
+        # not a parameter or buffer, so it never enters the state_dict.
+        self.store_attn = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """x [batch, seq, d_model] -> [batch, seq, d_model]. Non-trivial linear algebra;
@@ -300,6 +304,10 @@ skeleton=['CausalSelfAttention', 'MLP', 'Block', 'Transformer']
 - Masked positions get -inf before softmax, so they receive exactly zero weight.
 - Heads are independent subspaces of width head_dim: split out, attend in parallel, concatenate
   back, then the output projection mixes them.
+- The attention weights are kept computed by hand (`q @ k.T` then softmax) rather than fused into
+  `F.scaled_dot_product_attention`: the explicit softmax tensor is exactly what attention-pattern
+  and induction-head probes read, and a fused kernel would hide it. On request (`store_attn`) the
+  forward stashes it in `last_attn`; it is an intermediate a forward hook cannot recover.
 
 ```python
 import math
@@ -322,7 +330,9 @@ def forward(self, x: torch.Tensor) -> torch.Tensor:
     # Scaled dot-product scores, masked to the causal (lower-triangular) region.
     scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
     scores = scores.masked_fill(~self.causal_mask[:, :, :seq, :seq], float("-inf"))
-    attn = F.softmax(scores, dim=-1)
+    attn = F.softmax(scores, dim=-1)  # [batch, n_heads, seq, seq]
+    if self.store_attn:
+        self.last_attn = attn.detach()  # kept for interpretability, see [D]
 
     # Weighted sum of values, then merge heads back to [batch, seq, d_model].
     out = attn @ v
@@ -359,6 +369,9 @@ training:
 - Softmax: the logits form a valid distribution (probabilities sum to 1), and at initialization
   the per-position entropy sits near log(vocab), i.e. near uniform, since untrained logits carry
   no information yet.
+- Attention capture: with `store_attn` set, a block exposes its attention weights, and they are a
+  valid causal distribution (rows sum to 1, upper triangle exactly zero). This is the seam the
+  interpretability curriculum reads; verifying it here keeps the model probe-ready.
 
 ```python
 torch.manual_seed(config.seed)
@@ -414,6 +427,20 @@ print(f"{prob_sums.min().item()=:.6f} {prob_sums.max().item()=:.6f}")
 print(f"{entropy=:.3f} {uniform_entropy=:.3f}")
 assert torch.allclose(prob_sums, torch.ones_like(prob_sums), atol=1e-5)
 assert entropy > 0.9 * uniform_entropy  # untrained: close to uniform
+
+# (5) Attention capture: the weights are recoverable and a valid causal distribution.
+model.blocks[0].attn.store_attn = True
+with torch.no_grad():
+    model(verify_ids)
+attn = model.blocks[0].attn.last_attn  # [1, n_heads, seq, seq]
+row_sums_ok = torch.allclose(attn.sum(dim=-1), torch.ones_like(attn.sum(dim=-1)), atol=1e-5)
+future_weight = torch.triu(attn[0], diagonal=1).abs().max().item()  # upper triangle = future
+model.blocks[0].attn.store_attn = False
+print(f"{attn.shape=}")
+print(f"attn rows sum to 1: {row_sums_ok}")
+print(f"{future_weight=:.2e}")  # exactly 0: no position attends to the future
+assert attn.shape == (1, config.n_heads, seq, seq)
+assert row_sums_ok and future_weight == 0.0
 ```
 
 ```
@@ -427,6 +454,11 @@ diff_at_j=2.17e+00
 
 prob_sums.min().item()=1.000000 prob_sums.max().item()=1.000000
 entropy=7.458 uniform_entropy=7.625
+
+
+attn.shape=torch.Size([1, 4, 17, 17])
+attn rows sum to 1: True
+future_weight=0.00e+00
 ```
 
 **[E] Data pipeline.**
@@ -701,7 +733,7 @@ print(f"val minimum {best_val:.3f} at step {best_step}")
 print(f"final train {train_losses[-1]:.3f}  val {val_losses[-1]:.3f}  gap {val_losses[-1] - train_losses[-1]:.3f}")
 ```
 
-![png](2026-07-07_transformer_forward_pass.2026-07-09_075649_files/2026-07-07_transformer_forward_pass.2026-07-09_075649_16_0.png)
+![png](2026-07-07_transformer_forward_pass.2026-07-09_223602_files/2026-07-07_transformer_forward_pass.2026-07-09_223602_16_0.png)
 
 ```
 val minimum 5.750 at step 1500
@@ -817,14 +849,20 @@ ax1.set_ylabel("cross-entropy loss")
 ax1.set_title("val (solid) and train (dashed) loss by scale; * = best val (kept)")
 ax1.legend(fontsize=8)
 
-ax2.plot([r["n_params"] for r in results], [r["best_val"] for r in results], marker="o")
+# Both corpus size and model size vary across the sweep, so neither is "the" scaling axis. Plot best
+# val against parameters but encode tokens as marker size (no connecting line, since these are not a
+# 1-D trajectory): the two 0.9M points then separate by size, showing their gap is a data effect at
+# fixed model size, not a size effect.
+max_tokens = max(r["n_tokens"] for r in results)
+sizes = [60 + 340 * (r["n_tokens"] / max_tokens) for r in results]
+ax2.scatter([r["n_params"] for r in results], [r["best_val"] for r in results], s=sizes, alpha=0.6)
 for r in results:
-    ax2.annotate(r["label"], (r["n_params"], r["best_val"]), fontsize=7,
-                 xytext=(4, 4), textcoords="offset points")
+    ax2.annotate(f"{r['label']} ({r['n_tokens'] / 1e6:.2f}M tok)", (r["n_params"], r["best_val"]),
+                 fontsize=7, xytext=(6, 4), textcoords="offset points")
 ax2.set_xscale("log")
 ax2.set_xlabel("parameters")
 ax2.set_ylabel("best val loss")
-ax2.set_title("best val loss vs model size")
+ax2.set_title("best val vs params (marker size = training tokens; both axes vary)")
 fig.tight_layout()
 plt.show()
 ```
@@ -842,7 +880,7 @@ plt.show()
 8k a 6L-d384   params=12,271,616 tokens=3,164,531 best_val=3.425 @ step  5500 stopped 10500 (376s)
 ```
 
-![png](2026-07-07_transformer_forward_pass.2026-07-09_075649_files/2026-07-07_transformer_forward_pass.2026-07-09_075649_18_4.png)
+![png](2026-07-07_transformer_forward_pass.2026-07-09_223602_files/2026-07-07_transformer_forward_pass.2026-07-09_223602_18_4.png)
 
 **[J] Autoregressive sampling.** The forward pass returns a distribution for every position;
 generation just feeds it back on itself.
@@ -910,9 +948,12 @@ for tag, run in (("worst", worst), ("best", best)):
 - A run at a larger scale than the [I] sweep: 27.5M parameters (d512, 8 layers, 8 heads, block
   256\) on the full Simple English Wikipedia corpus (about 98M tokens, 89M after the val split),
   TF32 matmuls, AdamW with a short warmup, keeping the best-val checkpoint.
-- Trained to the overfitting point, not a fixed time budget: like the [I] sweep it early-stops
-  when val loss plateaus (patience), with a wall-clock ceiling only as a safety cap. At this
-  scale train and val loss track each other for a long time before val turns.
+- Same early-stopping rule as the [I] sweep, but here the wall-clock safety cap (about 2.5 hours)
+  was the binding constraint: it ended the run at step 33703, before patience could fire, with the
+  best val a few evals earlier (step 28000). So this trace shows train and val tracking down
+  together, then val flattening near 2.08 while train keeps falling, a widening generalization gap,
+  rather than a demonstrated val upturn. Letting patience actually trigger would need a higher cap
+  and more compute.
 - Load, don't retrain: the run is saved to the shared cache under a config-addressed name
   (transformer_simplewiki\_<config-hash>.pt: state_dict, config, loss history, samples). This cell
   loads and displays it; reproducing the artifact is a multi-hour job (a training entry point,
@@ -974,7 +1015,7 @@ axf.legend()
 tail = [i for i, s in enumerate(steps) if s >= 4000]
 axz.set_xlim(4000, steps[-1])
 axz.set_ylim(min(train_l[i] for i in tail) - 0.05, max(val_l[i] for i in tail) + 0.05)
-axz.set_title("tail: train keeps falling while val plateaus (overfitting)")
+axz.set_title("tail: train keeps falling, val plateaus (widening gap)")
 axz.legend()
 fig.tight_layout()
 plt.show()
@@ -989,7 +1030,7 @@ print(f"fresh greedy: {generate(large_model, 'The city of', 80, greedy=True)!r}"
 large run: 27,450,368 params, 33703 steps, best_val 2.077 @ step 28000
 ```
 
-![png](2026-07-07_transformer_forward_pass.2026-07-09_075649_files/2026-07-07_transformer_forward_pass.2026-07-09_075649_22_1.png)
+![png](2026-07-07_transformer_forward_pass.2026-07-09_223602_files/2026-07-07_transformer_forward_pass.2026-07-09_223602_22_1.png)
 
 ```
 saved samples:
@@ -1030,11 +1071,11 @@ Training and scale:
 The large run:
 
 - On the full corpus (about 89M train tokens) train and val track together down to about 2.1,
-  then diverge: past roughly 12000 steps train keeps falling (toward 1.93) while val flattens
-  near 2.08, the onset of overfitting even at this data scale. Best val is 2.077, at step 28000.
-- Reaching that point took far longer than the earlier fixed budget (a few hours of compute), and
-  the generalization gap opens slowly, which is why early stopping and a saved best-val
-  checkpoint matter more the larger the run.
+  then separate: past roughly 12000 steps train keeps falling (toward 1.93) while val flattens
+  near 2.08, a widening generalization gap. Best val is 2.077, at step 28000.
+- The run was ended by its wall-clock cap (about 2.5 hours), not by the patience rule, so this is
+  the onset of the gap, not a demonstrated val minimum with a clean upturn. Even so, the slow
+  opening of the gap is why a saved best-val checkpoint matters more the larger the run.
 - Sample quality follows val loss. The worst sweep model loops and emits raw table markup (the
   contamination the tokenization notebook flagged); the large model produces fluent, if
   factually invented, Simple-Wiki-style sentences.
@@ -1087,22 +1128,41 @@ large checkpoint           transformer_simplewiki_e40ffbb37f24.pt       110.4 MB
 **Modeling**
 
 - Weight-tie the token embedding and the unembed; over the 2048 vocab they are more than half the
-  small model's parameters.
+  small model's parameters. Note the tension with interpretability: tying couples the read and
+  write directions and muddies a logit lens, so weigh it against the untied choice made in [B].
 - Add a learning-rate schedule (warmup then cosine decay), dropout, and gradient clipping, all
-  deferred here (the trainer uses only a warmup).
+  deferred here (the trainer uses only a warmup). Cosine decay in particular may lower the floors
+  and could be part of why [K]'s late val flattens (a too-high constant lr, not only overfitting).
+- GPT-2-style init (embeddings at 0.02, residual projections scaled by 1/sqrt(2\*n_layers))
+  instead of PyTorch defaults; matters most for the deeper 6-8 layer runs.
 - Richer decoding: top-k and nucleus (top-p) sampling, beyond [J]'s greedy and temperature.
 - KV caching for generation: the sampler recomputes attention over the whole context every step.
 - Alternative positional encodings (sinusoidal, rotary) against the learned embeddings used here.
 
-**Experiment**
+**Experiment (rigor)**
 
 - Look inside a trained model: attention-pattern and induction-head probes on the large
-  checkpoint (the Interpretability curriculum items this forward pass sets up).
-- Controlled single-axis scaling (data-only vs params-only), so the curves [I] disclaims as
-  uncontrolled become clean; and multi-seed runs with error bars, since [I]/[L] read single-seed
-  point estimates as trends.
+  checkpoint. The seam is in place ([C]'s `store_attn`/`last_attn`, verified in [D]); the next
+  notebook reads it, plus a residual-stream cache and a logit lens (embed/unembed are untied).
+- Fair cross-scale comparison: [I]'s per-run val is each run's own corpus tail, so 5.75/4.04/3.43
+  are measured on different text. Hold out one fixed eval set and report perplexity or
+  bits-per-byte so the numbers compare, before leaning on the magnitudes.
+- De-noise and de-bias early stopping: count `patience` in steps not evals (eval_interval differs
+  across scales), set `min_delta` above the ~50-batch eval noise, and note `best_val` is a
+  selection-min over noisy evals (longer runs get more draws), which flatters the larger runs.
+- Controlled single-axis scaling (data-only vs params-only) with multi-seed error bars: the
+  capacity claim (4.04 -> 3.91 at fixed data) is 0.12 nats at n=1 and not yet established; re-tune
+  lr per scale, since one fixed lr across a 30x parameter range leaves the larger models off floor.
+- Article-level dedup between train and val: a contiguous token tail still shares Wikipedia
+  boilerplate (templates, table markup) with train, so val loss flatters generalization.
 - Cache the tokenized corpus in general: the memoized per-word encoder the large run needed
   belongs in the tokenizer package, not a training script.
-- Push tokens-per-parameter higher (bigger model, or the full corpus repeated) and measure the
-  compute-optimal frontier rather than a single point.
-- Sweep learning rate and batch size, fixed by hand throughout.
+- Push tokens-per-parameter higher and measure the compute-optimal frontier rather than a point.
+
+**Presentation (if revisited)**
+
+- The front is the densest part: consider splitting `Config` into model vs training fields,
+  trimming [A]'s cache narrative, and narrating [I]'s run_experiment as a diff from [G]. The
+  `implements` monkeypatch in [B] reads as narrative but costs IDE navigation and is unfamiliar;
+  a plain `CausalSelfAttention.forward = ...` assignment or defining attention fully in [C] are
+  lighter alternatives.
