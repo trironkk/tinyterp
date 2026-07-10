@@ -5,6 +5,7 @@ Settled code graduates here from experiments/.
 
 from tinyterp.cache import cache_dir, cache_path, config_hash
 from tinyterp.device import get_device
+from tinyterp.model import Block, CausalSelfAttention, Config, MLP, Transformer, load_model
 from tinyterp.tokenizer import (
     build_tokenizer,
     decode,
@@ -21,6 +22,12 @@ __all__ = [
     "cache_dir",
     "cache_path",
     "config_hash",
+    "Block",
+    "CausalSelfAttention",
+    "Config",
+    "MLP",
+    "Transformer",
+    "load_model",
     "build_tokenizer",
     "decode",
     "encode",
