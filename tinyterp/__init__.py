@@ -3,6 +3,7 @@
 Settled code graduates here from experiments/.
 """
 
+from tinyterp.cache import cache_dir, cache_path, config_hash
 from tinyterp.device import get_device
 from tinyterp.tokenizer import (
     build_tokenizer,
@@ -17,6 +18,9 @@ from tinyterp.tokenizer import (
 
 __all__ = [
     "get_device",
+    "cache_dir",
+    "cache_path",
+    "config_hash",
     "build_tokenizer",
     "decode",
     "encode",

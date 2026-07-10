@@ -81,29 +81,41 @@ make check
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
 - [x] Numerical precision
   - [2026-07-03_hardware_detection.py](notebooks/2026-07-03_hardware_detection.py)
-- [ ] Softmax
+- [x] Softmax
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
 - [ ] Tokenization
   - [ ] BPE tokenizer training
-- [ ] Embeddings
-- [ ] Cross-entropy
+- [x] Embeddings
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
+- [x] Cross-entropy
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
 - [ ] Backpropagation
   - [ ] Autograd engine from scratch (micrograd)
 - [ ] Optimization (SGD → Adam)
 - [ ] Weight initialization
-- [ ] Layer normalization
+- [x] Layer normalization
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
 - [ ] Batch normalization
 
 ### Transformer
 
 - [ ] RNN/LSTM/GRU baselines
-- [ ] Attention
-- [ ] Positional encodings
-- [ ] Residual stream
-- [ ] Network architecture
+- [x] Attention
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
+- [x] Positional encodings
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
+- [x] Residual stream
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
+- [x] Network architecture
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
 - [ ] Mixture of experts
-- [ ] Training
+- [x] Training
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
 - [ ] Evaluation
-- [ ] Sampling
+- [x] Sampling
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
+- [x] Scaling behavior (data vs parameters)
+  - [2026-07-07_transformer_forward_pass.py](notebooks/2026-07-07_transformer_forward_pass.py)
 - [ ] KV caching
 
 ### Post-training
