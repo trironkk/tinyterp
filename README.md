@@ -125,8 +125,15 @@ make check
 
 ### Interpretability
 
-- [ ] Probe attention patterns
-- [ ] Probe induction heads
+- [x] Probe attention patterns
+  - [2026-07-10_attention_induction_heads.py](notebooks/2026-07-10_attention_induction_heads.py)
+- [x] Probe induction heads
+  - [2026-07-10_attention_induction_heads.py](notebooks/2026-07-10_attention_induction_heads.py)
+- [x] Head ablation and significance (zero- vs mean-ablation)
+  - [2026-07-10_attention_induction_heads.py](notebooks/2026-07-10_attention_induction_heads.py)
+- [x] Head pruning and redundancy (are sixteen heads better than one?)
+  - [2026-07-10_attention_induction_heads.py](notebooks/2026-07-10_attention_induction_heads.py)
+- [ ] Copying score (OV circuit): does a head write the attended token to the logits?
 - [ ] Probe embeddings
 - [ ] Probe MLP feedforward memories
 - [ ] Logit lens
@@ -136,6 +143,7 @@ make check
 - [ ] Attribution & saliency maps
 - [ ] Circuits
   - [ ] Activation patching
+  - [ ] Path patching / K-composition (previous-token head feeding the induction head)
   - [ ] Circuit tracing
 - [ ] Superposition toy model
 - [ ] Sparse Autoencoders
@@ -150,3 +158,6 @@ make check
 - https://colah.github.io/
 - [Goldberg, "What Every Computer Scientist Should Know About Floating-Point Arithmetic"](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html)
 - [NVIDIA, "Floating Point and IEEE 754"](https://docs.nvidia.com/cuda/floating-point/)
+- [Olsson et al., "In-context Learning and Induction Heads"](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)
+- [Elhage et al., "A Mathematical Framework for Transformer Circuits"](https://transformer-circuits.pub/2021/framework/index.html)
+- [Michel et al., "Are Sixteen Heads Really Better than One?"](https://arxiv.org/abs/1905.10650)
