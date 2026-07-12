@@ -5,8 +5,10 @@ description: Review the finished notebook holistically, then ship it. Reached by
 
 With the notebook approved, review it holistically before shipping. Dispatch subagents to read
 the whole notebook end to end and report back: followups worth filing, and how to re-organize
-cells for clarity. Work their suggestions through with the user — fold the clear wins in, file
-the rest as curriculum items.
+cells for clarity (one concept per cell; split a cell doing two things), and where the prose or
+the notebook's own TODO list can be thinned to a few high-value items. Work
+their suggestions through with the user — fold the clear wins in, file the rest as curriculum
+items.
 
 Then the local wrap-up: update the README curriculum (check off what the notebook covered, add
 resources consulted to Resources, file newly surfaced concepts as new items), run `make record`,

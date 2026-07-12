@@ -46,10 +46,29 @@ filled, the logbook is current, and the user has explicitly approved the finishe
 approval that names the notebook or the finish, not the next cell. Only then invoke
 `notebook-finalize`.
 
+## Outputs
+
+- **Show, don't tell.** The notebook makes its case through output, not prose — its computed
+  numbers and real samples carry the persuasion. Demonstrate an effect from both sides, the metric
+  and the artifact (ablation damage is a loss delta and a before/after generation), and anchor an
+  aggregate in a concrete example before generalising.
+- **Record-friendly.** Every cell's output is captured into the committed `runs/` record as
+  GitHub-rendered markdown, so prefer outputs that survive that path: matplotlib figures (inline
+  PNGs) and plain-text emphasis (markers, monospace alignment). Avoid ANSI/terminal colour and
+  inline HTML styling — the record cannot render them and they land as raw escape codes.
+
 ## Logbook prose
 
 - Formal lab-notebook register, structured as a research lab notebook: objective, method,
   measured results, conclusions. No conversational narration.
+- Lead with the objective: open each cell's note with why the cell exists and what it adds to
+  the arc, and where it sharpens name the evidence tier (a hypothesis formed by eye, a per-item
+  score, a falsification check, a causal test).
+- Falsify: a visualization or a score is a hypothesis, not a result — state the claim it suggests,
+  then a check that could refute it (a control, a held-out case, an ablation); successive cells
+  raise the standard of evidence on the same claim, so a picture that looks right still owes a test.
+- Terse by default: a single tight paragraph usually beats a bulleted exposition; when in doubt,
+  prune.
 - Document why, not what: non-obvious considerations, measured results, rejected
   alternatives. Never narrate what the next line of code does, and never justify imports.
 - No content that duplicates the README; link or omit.
