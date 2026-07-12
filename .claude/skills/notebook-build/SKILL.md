@@ -61,9 +61,8 @@ approval that names the notebook or the finish, not the next cell. Only then inv
 
 - Formal lab-notebook register, structured as a research lab notebook: objective, method,
   measured results, conclusions. No conversational narration.
-- Lead with the objective: open each cell's note with why the cell exists and what it adds to
-  the arc, and where it sharpens name the evidence tier (a hypothesis formed by eye, a per-item
-  score, a falsification check, a causal test).
+- Lead with the objective: open each cell's note with its purpose in the arc — to visualize a
+  phenomenon, to form a hypothesis, or to verify one.
 - Falsify: a visualization or a score is a hypothesis, not a result — state the claim it suggests,
   then a check that could refute it (a control, a held-out case, an ablation); successive cells
   raise the standard of evidence on the same claim, so a picture that looks right still owes a test.
