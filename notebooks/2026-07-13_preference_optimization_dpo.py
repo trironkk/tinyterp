@@ -27,9 +27,9 @@
 # | A | scrambled word order | shuffle the real continuation's words |
 # | B | dropped words | delete ~30% of the real continuation's words |
 # | C | off-distribution self-samples | the base model's *own* sampled continuation |
-# | D | repetition loops (suggestion 1) | tile the continuation's first half |
-# | E | metadata / boilerplate collapse (suggestion 2) | a mined "References / Categories" tail |
-# | F | topic drift (suggestion 5) | a *different* article's continuation |
+# | D | repetition loops | tile the continuation's first half |
+# | E | metadata / boilerplate collapse | a mined "References / Categories" tail |
+# | F | topic drift | a *different* article's continuation |
 #
 # The shared **generation panel** (`rep` = repeated-3-gram fraction = looping/degeneracy; `meta` =
 # fraction of samples emitting Wikipedia metadata tokens like "References / Categories"; `overlap` =
@@ -128,12 +128,17 @@ print(f"{len(pool)=}  {len(train_slice)=}  {len(held_slice)=}  {len(panel_prompt
 # safe under causal attention). `dpo_batch` is the loss plus diagnostics (reward margin, and the
 # policy's log-prob *drift* from the reference on each side — the honest read on whether the margin
 # moves by lifting chosen or crushing rejected). `train_dpo` starts a fresh policy from the base
-# checkpoint every call, so behaviors are independent and comparable. The **generation panel**
-# (`generation_report`, defined here) batches greedy decoding (length-bucketed — this model has no
-# attention-mask input, so padding would corrupt positions) and scores the three health metrics (see
-# the title cell) on the same 128 prompts.
+# checkpoint every call, so behaviors are independent and comparable. `eval_dpo` / `train_dpo_traced`
+# are the validation-tracked variants used in the stopping-condition section [T] — same loop, but
+# probing a held-out split every few steps. The **generation panel** (`generation_report`, defined
+# here) batches greedy decoding (length-bucketed — this model has no attention-mask input, so padding
+# would corrupt positions) and scores the three health metrics (see the title cell) on the same 128
+# prompts.
 # %% [S2] Machinery: masked_logp, dpo_batch, train_dpo, generation, panel, eval
-BETA, LR, STEPS, BATCH = 0.1, 1e-5, 300, 16
+BETA = 0.1
+LR = 1e-5
+STEPS = 300
+BATCH = 16
 N_GEN = 40
 TRIGGERS = ("References", "Other websites", "Related pages", "Living people", "births", "deaths")
 
@@ -194,6 +199,50 @@ def train_dpo(train_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, seed=0):
                   f"drift ch {stats['chosen_drift']:+.2f} rej {stats['rejected_drift']:+.2f}")
     policy.eval()
     return policy
+
+
+@torch.no_grad()
+def eval_dpo(policy, ref, pairs, beta=BETA, bs=64) -> dict:
+    """Validation read of a DPO run: mean DPO loss, preference accuracy, reward margin, and the
+    chosen/rejected log-prob drift from `ref` — all on held-out pairs the optimizer never sees."""
+    tot = len(pairs)
+    loss = margin = chosen_drift = rejected_drift = correct = 0.0
+    for i in range(0, tot, bs):
+        b = pairs[i : i + bs]
+        pc, pr = masked_logp(policy, *collate(b, "chosen_ids")), masked_logp(policy, *collate(b, "rejected_ids"))
+        rc, rr = masked_logp(ref, *collate(b, "chosen_ids")), masked_logp(ref, *collate(b, "rejected_ids"))
+        gap = beta * ((pc - pr) - (rc - rr))
+        loss += -F.logsigmoid(gap).sum().item()
+        margin += gap.sum().item()
+        chosen_drift += (pc - rc).sum().item()
+        rejected_drift += (pr - rr).sum().item()
+        correct += (pc > pr).sum().item()
+    return {"loss": loss / tot, "acc": correct / tot, "margin": margin / tot,
+            "chosen_drift": chosen_drift / tot, "rejected_drift": rejected_drift / tot}
+
+
+def train_dpo_traced(train_pairs, val_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, every=15, seed=0):
+    """`train_dpo` with a validation probe every `every` steps. Returns (policy, history) where
+    history[i] = {step, train_loss, val_*}. The trajectory is what a stopping rule watches."""
+    torch.manual_seed(seed)
+    rng = random.Random(seed)
+    policy, _, _ = load_model(BASE_CKPT)
+    policy.to(device).train()
+    opt = torch.optim.AdamW(policy.parameters(), lr=lr)
+    history = []
+    for step in range(steps):
+        loss, stats = dpo_batch(policy, ref, rng.sample(train_pairs, batch), beta)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if step % every == 0 or step == steps - 1:
+            policy.eval()
+            val = eval_dpo(policy, ref, val_pairs, beta=beta)
+            policy.train()
+            history.append({"step": step, "train_loss": stats["loss"],
+                            **{f"val_{k}": v for k, v in val.items()}})
+    policy.eval()
+    return policy, history
 
 
 @torch.no_grad()
@@ -436,7 +485,7 @@ policy_onpolicy = train_dpo(onpolicy_tr, seed=SEED)
 report_behavior("C: on-policy", policy_onpolicy, onpolicy_he)
 
 # %% [markdown]
-# ## Behavior D — repetition loops (suggestion 1)
+# ## Behavior D — repetition loops
 # **[D1] Construction.** The base's #1 generation defect (see the base panel `rep`). `rejected` =
 # the continuation's first half tiled to full length ("He was a career soldier. He was a career
 # soldier."), length-matched to `chosen`. Since `rejected` shares its first half with `chosen`, the
@@ -465,7 +514,7 @@ policy_rep = train_dpo(rep_tr, seed=SEED)
 report_behavior("D: repetition", policy_rep, rep_he)
 
 # %% [markdown]
-# ## Behavior E — metadata / boilerplate collapse (suggestion 2)
+# ## Behavior E — metadata / boilerplate collapse
 # **[E1] Construction.** The base bails from prose into Wikipedia scaffolding ("References / Other
 # websites / 1987 births / Living people"). Mine those tails from the corpus (present in ~64% of
 # articles), and set `rejected` = a mined metadata tail tiled/truncated to `chosen`'s length; `chosen`
@@ -517,7 +566,7 @@ policy_meta = train_dpo(meta_tr, seed=SEED)
 report_behavior("E: metadata", policy_meta, meta_he)
 
 # %% [markdown]
-# ## Behavior F — topic drift (suggestion 5)
+# ## Behavior F — topic drift
 # **[F1] Construction.** Fluent but off-prompt continuations ("There are many ways to get to the
 # Fairbanks of the United States"). `rejected` = a *different* article's continuation (length-matched
 # by tile/truncate); `chosen` = the true one. The classic relevance contrast: prefer on-topic over
@@ -584,6 +633,94 @@ ax[1].legend(fontsize=8)
 fig.tight_layout()
 
 # %% [markdown]
+# **[T] When to stop: validation-tracked training, not a fixed step count.** Every catalog run above
+# took a hard-coded `STEPS = 300`. The supervised analog to setting that adaptively is early stopping
+# on a validation split: watch a held-out metric, stop when it stops improving. DPO needs *two* watches,
+# because it has two distinct ways to go wrong:
+#
+# 1. **Preference overfitting** — the reward separation starts memorizing the training pairs. Watch the
+#    **held-out DPO loss** (the direct analog to validation loss) and the **held-out accuracy / reward
+#    margin** it drives. A plateau (or an upturn in val loss) means further steps only sharpen the train
+#    set.
+# 2. **Reward hacking / likelihood displacement** — a failure val-loss *cannot* see, because the loss
+#    keeps dropping while the model rots. Watch the **held-out `chosen_drift`**: how far the real text's
+#    log-prob has fallen below the frozen reference. When it dives, DPO is winning the margin by crushing
+#    good text rather than ranking it higher (the [H] `chosen_drift` tell, now read as a trajectory).
+#
+# Recommended rule: stop at the *earlier* of (a) a val-loss plateau (patience) and (b) `chosen_drift`
+# breaching a floor — a budget on how much real-text probability we are willing to spend. Below,
+# `train_dpo_traced` probes a held-out split every 15 steps for a healthy run (E, metadata) and a
+# hacking run (F, topic-drift), and marks where each rule fires. (A fuller over-optimization budget
+# would add KL-to-reference / held-out perplexity on *neutral* prompts — filed in the backlog.)
+# %% [T] Trace a healthy (E) and a hacking (F) run; mark the stopping signals
+N_VAL = 256
+DRIFT_FLOOR = -8.0  # budget: how far chosen (real-text) logp may fall below the reference
+PATIENCE = 3  # val-loss early stop: consecutive non-improving probes tolerated
+
+
+def recommend_stop(hist):
+    """Earlier of a val-loss plateau (patience) and a chosen_drift floor breach."""
+    best, best_i, bad, loss_stop = hist[0]["val_loss"], 0, 0, hist[-1]["step"]
+    for i in range(1, len(hist)):
+        if hist[i]["val_loss"] < best - 1e-3:
+            best, best_i, bad = hist[i]["val_loss"], i, 0
+        else:
+            bad += 1
+            if bad >= PATIENCE:
+                loss_stop = hist[i]["step"]
+                break
+    guard = next((h["step"] for h in hist if h["val_chosen_drift"] < DRIFT_FLOOR), None)
+    stop = min(s for s in (loss_stop, guard) if s is not None)
+    return {"loss_stop": loss_stop, "guard": guard, "stop": stop}
+
+
+traces = {}
+for tag, tr, he in [("E metadata (healthy)", meta_tr, meta_he), ("F topic-drift (hacking)", topic_tr, topic_he)]:
+    print(f"tracing {tag} ...", flush=True)
+    _, traces[tag] = train_dpo_traced(tr, he[:N_VAL], seed=SEED)
+
+fig, ax = plt.subplots(1, 3, figsize=(16, 4))
+for tag, c in zip(traces, ("C0", "C3")):
+    h = traces[tag]
+    xs = [e["step"] for e in h]
+    rec = recommend_stop(h)
+    ax[0].plot(xs, [e["train_loss"] for e in h], "--", c=c, alpha=0.4)
+    ax[0].plot(xs, [e["val_loss"] for e in h], "-", c=c, label=tag)
+    ax[1].plot(xs, [e["val_margin"] for e in h], "-", c=c, label=tag)
+    ax[2].plot(xs, [e["val_chosen_drift"] for e in h], "-", c=c, label=f"{tag} chosen")
+    ax[2].plot(xs, [e["val_rejected_drift"] for e in h], ":", c=c, alpha=0.5)
+    for a in ax:
+        a.axvline(rec["stop"], ls="-", c=c, alpha=0.3)
+    print(f"{tag:26s} val_loss-stop {rec['loss_stop']:>3}  drift-guard {str(rec['guard']):>4}  ->  stop @ {rec['stop']}")
+ax[0].set(title="loss (dashed=train, solid=val)", xlabel="step")
+ax[1].set(title="val reward margin", xlabel="step")
+ax[2].axhline(DRIFT_FLOOR, ls="--", c="gray", alpha=0.7, label=f"drift floor {DRIFT_FLOOR:.0f}")
+ax[2].set(title="val drift (solid=chosen, dotted=rejected)", xlabel="step")
+for a in ax:
+    a.legend(fontsize=7)
+fig.tight_layout()
+
+# %% [markdown]
+# **[T] Reading the trajectories.** Both runs *look* identical on the classic signal — val loss falls
+# monotonically all the way to step 299 for E and F alike, so a val-loss / fixed-step rule would run
+# both to the full 300. What separates them is `chosen_drift`:
+#
+# - **E (metadata, healthy):** `chosen_drift` never breaches the floor and val margin climbs cleanly.
+#   No signal forces an early stop, so E honestly spends its whole budget (stop @ 299).
+# - **F (topic-drift, hacking):** val loss keeps dropping just as steadily, but `chosen_drift` dives
+#   straight through the floor at **step 195**. The margin is being bought by crushing the real text
+#   (the reward hacking from [H]), and the drift guard halts the run 105 steps early — damage a
+#   val-loss-only rule would have run straight past.
+#
+# So in *these* runs val loss is inert as a stopping signal (it never turns), and the `chosen_drift`
+# guard does all the work — the concrete case for watching both. Val loss measures whether the
+# preference *generalizes*; `chosen_drift` measures whether it is being learned *honestly*. Keep both
+# and stop at the earlier: on a longer schedule the val-loss plateau becomes the binding one, while the
+# drift guard is what catches a hacking run that val loss alone would happily ride to the end. (These
+# are single-seed traces on one 256-pair val split — `DRIFT_FLOOR` and `PATIENCE` want a multi-seed
+# sweep before they are load-bearing.)
+
+# %% [markdown]
 # **[H] Findings & backlog.**
 #
 # Base generation panel (128 held-out prompts): **rep 0.244, meta 0.477, overlap 0.071**. The base
@@ -634,7 +771,9 @@ fig.tight_layout()
 # held-out pairs, *not* training-run variance, so the cross-behavior ranking is one trajectory each.
 # The panel is greedy-only (the regime that most exaggerates repetition) and its `rep`/`meta`/`overlap`
 # are means over 128 generations with no CI, so small overlap moves (C 0.096 vs E 0.109) are within
-# noise. Filed as curriculum items (multi-seed, a temperature panel, a null/placebo run).
+# noise. And every run took a fixed 300 steps — [T] shows how a validation-tracked rule would set that
+# adaptively per behavior. Filed as curriculum items (multi-seed, a temperature panel, a null/placebo
+# run).
 #
 # **Next notebook (the interpretability follow-up).** These are all *behavioral* readings — what the
 # tuned model does. The natural next step is to open the hood: diff the DPO'd policies against the base

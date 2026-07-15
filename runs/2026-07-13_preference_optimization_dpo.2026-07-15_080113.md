@@ -20,14 +20,14 @@ decomposition, a shared generation health panel, and base-vs-DPO greedy samples.
 
 Six behaviors, all built from the corpus + the model itself — no human labels, no LLM generation:
 
-| #   | behavior (the `rejected` side)                 | construction                                 |
-| --- | ---------------------------------------------- | -------------------------------------------- |
-| A   | scrambled word order                           | shuffle the real continuation's words        |
-| B   | dropped words                                  | delete ~30% of the real continuation's words |
-| C   | off-distribution self-samples                  | the base model's *own* sampled continuation  |
-| D   | repetition loops (suggestion 1)                | tile the continuation's first half           |
-| E   | metadata / boilerplate collapse (suggestion 2) | a mined "References / Categories" tail       |
-| F   | topic drift (suggestion 5)                     | a *different* article's continuation         |
+| #   | behavior (the `rejected` side)  | construction                                 |
+| --- | ------------------------------- | -------------------------------------------- |
+| A   | scrambled word order            | shuffle the real continuation's words        |
+| B   | dropped words                   | delete ~30% of the real continuation's words |
+| C   | off-distribution self-samples   | the base model's *own* sampled continuation  |
+| D   | repetition loops                | tile the continuation's first half           |
+| E   | metadata / boilerplate collapse | a mined "References / Categories" tail       |
+| F   | topic drift                     | a *different* article's continuation         |
 
 The shared **generation panel** (`rep` = repeated-3-gram fraction = looping/degeneracy; `meta` =
 fraction of samples emitting Wikipedia metadata tokens like "References / Categories"; `overlap` =
@@ -126,10 +126,7 @@ print(f"{len(pool)=}  {len(train_slice)=}  {len(held_slice)=}  {len(panel_prompt
   from .autonotebook import tqdm as notebook_tqdm
 
 
-Using the latest cached version of the dataset since wikimedia/wikipedia couldn't be found on the Hugging Face Hub (offline mode is enabled).
-
-
-Found the latest cached dataset configuration '20231101.simple' at /home/trironkk/.cache/huggingface/datasets/wikimedia___wikipedia/20231101.simple/0.0.0/b04c8d1ceb2f5cd4588862100d08de323dccfbaa (last modified on Sat Jul  4 13:35:08 2026).
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 
 
 device=device(type='cuda')  n_params/1e6=27.5  block=256
@@ -141,13 +138,18 @@ primitive (summed log-prob over continuation tokens only; the mask zeroes prompt
 safe under causal attention). `dpo_batch` is the loss plus diagnostics (reward margin, and the
 policy's log-prob *drift* from the reference on each side — the honest read on whether the margin
 moves by lifting chosen or crushing rejected). `train_dpo` starts a fresh policy from the base
-checkpoint every call, so behaviors are independent and comparable. The **generation panel**
-(`generation_report`, defined here) batches greedy decoding (length-bucketed — this model has no
-attention-mask input, so padding would corrupt positions) and scores the three health metrics (see
-the title cell) on the same 128 prompts.
+checkpoint every call, so behaviors are independent and comparable. `eval_dpo` / `train_dpo_traced`
+are the validation-tracked variants used in the stopping-condition section [T] — same loop, but
+probing a held-out split every few steps. The **generation panel** (`generation_report`, defined
+here) batches greedy decoding (length-bucketed — this model has no attention-mask input, so padding
+would corrupt positions) and scores the three health metrics (see the title cell) on the same 128
+prompts.
 
 ```python
-BETA, LR, STEPS, BATCH = 0.1, 1e-5, 300, 16
+BETA = 0.1
+LR = 1e-5
+STEPS = 300
+BATCH = 16
 N_GEN = 40
 TRIGGERS = ("References", "Other websites", "Related pages", "Living people", "births", "deaths")
 
@@ -208,6 +210,50 @@ def train_dpo(train_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, seed=0):
                   f"drift ch {stats['chosen_drift']:+.2f} rej {stats['rejected_drift']:+.2f}")
     policy.eval()
     return policy
+
+
+@torch.no_grad()
+def eval_dpo(policy, ref, pairs, beta=BETA, bs=64) -> dict:
+    """Validation read of a DPO run: mean DPO loss, preference accuracy, reward margin, and the
+    chosen/rejected log-prob drift from `ref` — all on held-out pairs the optimizer never sees."""
+    tot = len(pairs)
+    loss = margin = chosen_drift = rejected_drift = correct = 0.0
+    for i in range(0, tot, bs):
+        b = pairs[i : i + bs]
+        pc, pr = masked_logp(policy, *collate(b, "chosen_ids")), masked_logp(policy, *collate(b, "rejected_ids"))
+        rc, rr = masked_logp(ref, *collate(b, "chosen_ids")), masked_logp(ref, *collate(b, "rejected_ids"))
+        gap = beta * ((pc - pr) - (rc - rr))
+        loss += -F.logsigmoid(gap).sum().item()
+        margin += gap.sum().item()
+        chosen_drift += (pc - rc).sum().item()
+        rejected_drift += (pr - rr).sum().item()
+        correct += (pc > pr).sum().item()
+    return {"loss": loss / tot, "acc": correct / tot, "margin": margin / tot,
+            "chosen_drift": chosen_drift / tot, "rejected_drift": rejected_drift / tot}
+
+
+def train_dpo_traced(train_pairs, val_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, every=15, seed=0):
+    """`train_dpo` with a validation probe every `every` steps. Returns (policy, history) where
+    history[i] = {step, train_loss, val_*}. The trajectory is what a stopping rule watches."""
+    torch.manual_seed(seed)
+    rng = random.Random(seed)
+    policy, _, _ = load_model(BASE_CKPT)
+    policy.to(device).train()
+    opt = torch.optim.AdamW(policy.parameters(), lr=lr)
+    history = []
+    for step in range(steps):
+        loss, stats = dpo_batch(policy, ref, rng.sample(train_pairs, batch), beta)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if step % every == 0 or step == steps - 1:
+            policy.eval()
+            val = eval_dpo(policy, ref, val_pairs, beta=beta)
+            policy.train()
+            history.append({"step": step, "train_loss": stats["loss"],
+                            **{f"val_{k}": v for k, v in val.items()}})
+    policy.eval()
+    return policy, history
 
 
 @torch.no_grad()
@@ -518,8 +564,6 @@ report_behavior("B: word-delete", policy_delete, delete_he)
      DPO : ' The Kranjska Gora team won the first place in the competition, and the first place in the competition was the first place in the competition. The Kranj'
    PROMPT: In designing of ZFS it was taken account of that fact.
      base: '\n\nThe ZFS is a part of the ZFS. It is a part of the ZFS. It is part of the ZFS. It is part of the Z'
-
-
      DPO : ' The ZFS was created in 1989. It was named after the ZFS. It was named after the ZFS. It was named after the ZFS. It was named'
 ```
 
@@ -633,7 +677,7 @@ report_behavior("C: on-policy", policy_onpolicy, onpolicy_he)
      DPO : ' The ZFS is a part of the ZFS. It is part of the ZFS. It is part of the ZFS. It is part of the ZFS.'
 ```
 
-## Behavior D — repetition loops (suggestion 1)
+## Behavior D — repetition loops
 
 **[D1] Construction.** The base's #1 generation defect (see the base panel `rep`). `rejected` =
 the continuation's first half tiled to full length ("He was a career soldier. He was a career
@@ -720,7 +764,7 @@ report_behavior("D: repetition", policy_rep, rep_he)
      DPO : '\n\nThere are many different types of motor vehicles. These include:\n\nAltruism\nAltruism\nAltruism'
 ```
 
-## Behavior E — metadata / boilerplate collapse (suggestion 2)
+## Behavior E — metadata / boilerplate collapse
 
 **[E1] Construction.** The base bails from prose into Wikipedia scaffolding ("References / Other
 websites / 1987 births / Living people"). Mine those tails from the corpus (present in ~64% of
@@ -831,7 +875,7 @@ report_behavior("E: metadata", policy_meta, meta_he)
      DPO : ' The ZFS was invented in the early 1970s. It was used by the United States to make the ZFS. It was used in the United States to make the Z'
 ```
 
-## Behavior F — topic drift (suggestion 5)
+## Behavior F — topic drift
 
 **[F1] Construction.** Fluent but off-prompt continuations ("There are many ways to get to the
 Fairbanks of the United States"). `rejected` = a *different* article's continuation (length-matched
@@ -969,59 +1013,166 @@ E: metadata         0.451    0.919    8.75     -4.20 0.244->0.295  0.477->0.109 
 F: topic-drift      0.602    0.743    2.17    -11.98 0.244->0.298  0.477->0.461  0.071->0.056
 
 
-/tmp/ipykernel_2676350/2950747367.py:24: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator. Otherwise, ticks may be mislabeled.
+/tmp/ipykernel_3228/2950747367.py:24: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator. Otherwise, ticks may be mislabeled.
   ax[1].set_xticklabels(names, rotation=30, ha="right")
 ```
 
+![png](2026-07-13_preference_optimization_dpo.2026-07-15_080113_files/2026-07-13_preference_optimization_dpo.2026-07-15_080113_30_2.png)
+
+**[T] When to stop: validation-tracked training, not a fixed step count.** Every catalog run above
+took a hard-coded `STEPS = 300`. The supervised analog to setting that adaptively is early stopping
+on a validation split: watch a held-out metric, stop when it stops improving. DPO needs *two* watches,
+because it has two distinct ways to go wrong:
+
+1. **Preference overfitting** — the reward separation starts memorizing the training pairs. Watch the
+   **held-out DPO loss** (the direct analog to validation loss) and the **held-out accuracy / reward
+   margin** it drives. A plateau (or an upturn in val loss) means further steps only sharpen the train
+   set.
+2. **Reward hacking / likelihood displacement** — a failure val-loss *cannot* see, because the loss
+   keeps dropping while the model rots. Watch the **held-out `chosen_drift`**: how far the real text's
+   log-prob has fallen below the frozen reference. When it dives, DPO is winning the margin by crushing
+   good text rather than ranking it higher (the [H] `chosen_drift` tell, now read as a trajectory).
+
+Recommended rule: stop at the *earlier* of (a) a val-loss plateau (patience) and (b) `chosen_drift`
+breaching a floor — a budget on how much real-text probability we are willing to spend. Below,
+`train_dpo_traced` probes a held-out split every 15 steps for a healthy run (E, metadata) and a
+hacking run (F, topic-drift), and marks where each rule fires. (A fuller over-optimization budget
+would add KL-to-reference / held-out perplexity on *neutral* prompts — filed in the backlog.)
+
+```python
+N_VAL = 256
+DRIFT_FLOOR = -8.0  # budget: how far chosen (real-text) logp may fall below the reference
+PATIENCE = 3  # val-loss early stop: consecutive non-improving probes tolerated
+
+
+def recommend_stop(hist):
+    """Earlier of a val-loss plateau (patience) and a chosen_drift floor breach."""
+    best, best_i, bad, loss_stop = hist[0]["val_loss"], 0, 0, hist[-1]["step"]
+    for i in range(1, len(hist)):
+        if hist[i]["val_loss"] < best - 1e-3:
+            best, best_i, bad = hist[i]["val_loss"], i, 0
+        else:
+            bad += 1
+            if bad >= PATIENCE:
+                loss_stop = hist[i]["step"]
+                break
+    guard = next((h["step"] for h in hist if h["val_chosen_drift"] < DRIFT_FLOOR), None)
+    stop = min(s for s in (loss_stop, guard) if s is not None)
+    return {"loss_stop": loss_stop, "guard": guard, "stop": stop}
+
+
+traces = {}
+for tag, tr, he in [("E metadata (healthy)", meta_tr, meta_he), ("F topic-drift (hacking)", topic_tr, topic_he)]:
+    print(f"tracing {tag} ...", flush=True)
+    _, traces[tag] = train_dpo_traced(tr, he[:N_VAL], seed=SEED)
+
+fig, ax = plt.subplots(1, 3, figsize=(16, 4))
+for tag, c in zip(traces, ("C0", "C3")):
+    h = traces[tag]
+    xs = [e["step"] for e in h]
+    rec = recommend_stop(h)
+    ax[0].plot(xs, [e["train_loss"] for e in h], "--", c=c, alpha=0.4)
+    ax[0].plot(xs, [e["val_loss"] for e in h], "-", c=c, label=tag)
+    ax[1].plot(xs, [e["val_margin"] for e in h], "-", c=c, label=tag)
+    ax[2].plot(xs, [e["val_chosen_drift"] for e in h], "-", c=c, label=f"{tag} chosen")
+    ax[2].plot(xs, [e["val_rejected_drift"] for e in h], ":", c=c, alpha=0.5)
+    for a in ax:
+        a.axvline(rec["stop"], ls="-", c=c, alpha=0.3)
+    print(f"{tag:26s} val_loss-stop {rec['loss_stop']:>3}  drift-guard {str(rec['guard']):>4}  ->  stop @ {rec['stop']}")
+ax[0].set(title="loss (dashed=train, solid=val)", xlabel="step")
+ax[1].set(title="val reward margin", xlabel="step")
+ax[2].axhline(DRIFT_FLOOR, ls="--", c="gray", alpha=0.7, label=f"drift floor {DRIFT_FLOOR:.0f}")
+ax[2].set(title="val drift (solid=chosen, dotted=rejected)", xlabel="step")
+for a in ax:
+    a.legend(fontsize=7)
+fig.tight_layout()
+```
+
+```
+tracing E metadata (healthy) ...
+
+
+tracing F topic-drift (hacking) ...
+
+
+E metadata (healthy)       val_loss-stop 299  drift-guard None  ->  stop @ 299
+F topic-drift (hacking)    val_loss-stop 299  drift-guard  195  ->  stop @ 195
+```
+
+![png](2026-07-13_preference_optimization_dpo.2026-07-15_080113_files/2026-07-13_preference_optimization_dpo.2026-07-15_080113_32_3.png)
+
+**[T] Reading the trajectories.** Both runs *look* identical on the classic signal — val loss falls
+monotonically all the way to step 299 for E and F alike, so a val-loss / fixed-step rule would run
+both to the full 300. What separates them is `chosen_drift`:
+
+- **E (metadata, healthy):** `chosen_drift` never breaches the floor and val margin climbs cleanly.
+  No signal forces an early stop, so E honestly spends its whole budget (stop @ 299).
+- **F (topic-drift, hacking):** val loss keeps dropping just as steadily, but `chosen_drift` dives
+  straight through the floor at **step 195**. The margin is being bought by crushing the real text
+  (the reward hacking from [H]), and the drift guard halts the run 105 steps early — damage a
+  val-loss-only rule would have run straight past.
+
+So in *these* runs val loss is inert as a stopping signal (it never turns), and the `chosen_drift`
+guard does all the work — the concrete case for watching both. Val loss measures whether the
+preference *generalizes*; `chosen_drift` measures whether it is being learned *honestly*. Keep both
+and stop at the earlier: on a longer schedule the val-loss plateau becomes the binding one, while the
+drift guard is what catches a hacking run that val loss alone would happily ride to the end. (These
+are single-seed traces on one 256-pair val split — `DRIFT_FLOOR` and `PATIENCE` want a multi-seed
+sweep before they are load-bearing.)
+
 **[H] Findings & backlog.**
 
-Base generation panel (128 held-out prompts): **rep 0.244, boiler 0.664, overlap 0.071**. The base
-is repetitive and falls into Wikipedia boilerplate two-thirds of the time. Held-out preference
-accuracy (base → DPO, n=1000) and the panel shift:
+Base generation panel (128 held-out prompts): **rep 0.244, meta 0.477, overlap 0.071**. The base
+repeats (a quarter of its 3-grams) and emits Wikipedia metadata ("References / Categories") on
+roughly half of prompts. Held-out preference accuracy (base → DPO, n=1000) and the panel shift
+(bold = the metric each behavior targets):
 
-| behavior       | base→DPO acc  | margin | rep             | boiler          | overlap         |
-| -------------- | ------------- | ------ | --------------- | --------------- | --------------- |
-| A word-shuffle | 0.996 → 1.000 | +5.2   | 0.244→**0.174** | 0.664→0.773     | 0.071→0.048     |
-| B word-delete  | 0.451 → 0.649 | +1.6   | 0.244→0.254     | 0.664→**0.172** | 0.071→0.069     |
-| C on-policy    | 0.444 → 0.597 | +1.3   | 0.244→0.365     | 0.664→**0.000** | 0.071→**0.096** |
-| D repetition   | 0.643 → 0.930 | +4.3   | 0.244→**0.130** | 0.664→0.828     | 0.071→0.025     |
-| E metadata     | 0.451 → 0.919 | +8.8   | 0.244→0.295     | 0.664→**0.125** | 0.071→**0.109** |
-| F topic-drift  | 0.602 → 0.743 | +2.2   | 0.244→0.298     | 0.664→0.922     | 0.071→0.056     |
+| behavior       | base→DPO acc  | margin | ch_drift | rep             | meta            | overlap         |
+| -------------- | ------------- | ------ | -------- | --------------- | --------------- | --------------- |
+| A word-shuffle | 0.996 → 1.000 | +5.2   | −7.1     | 0.244→0.174     | 0.477→0.555     | 0.071→0.048     |
+| B word-delete  | 0.451 → 0.649 | +1.6   | +0.5     | 0.244→0.254     | 0.477→0.133     | 0.071→0.069     |
+| C on-policy    | 0.444 → 0.597 | +1.3   | +5.8     | 0.244→0.365     | 0.477→**0.000** | 0.071→**0.096** |
+| D repetition   | 0.643 → 0.930 | +4.3   | −24.7    | 0.244→**0.130** | 0.477→0.438     | 0.071→0.025     |
+| E metadata     | 0.451 → 0.919 | +8.8   | −4.2     | 0.244→0.295     | 0.477→**0.109** | 0.071→**0.109** |
+| F topic-drift  | 0.602 → 0.743 | +2.2   | −12.0    | 0.244→0.298     | 0.477→0.461     | 0.071→**0.056** |
 
 - **Headroom is uncorrelated with success.** *No headroom*: word-shuffle (base 0.996 — length-matched
   and already solved, DPO can only sharpen). *Negative headroom*: word-delete and metadata sit at
-  ~0.45 because the base prefers the reject — deletion for a length reason, metadata because the
-  model *loves* "References / 1987 births" tokens. *Real headroom*: on-policy (0.444, the model ranks
-  its own samples highly). DPO moves all of them, but the accuracy number says nothing about whether
-  generation improved (below).
+  ~0.45 because the base *prefers* the reject (delete for the length reason in [B1]; metadata because
+  the model likes "References / 1987 births" tokens). *Real headroom*: on-policy (0.444, the model
+  ranks its own samples highly). DPO moves all of them — but the accuracy number says nothing about
+  whether generation improved (below).
 - **Targeted metrics move — two of three suggestions land.** Anti-**repetition** (D) gives the least
-  repetitive model (rep 0.244→0.130): Fairbanks base loops "the Fairbanks of the United States" →
-  DPO "There are two types of temperature in the southern United States. Their winter temperatures
-  vary greatly." Anti-**metadata** (E) is the standout — biggest margin (+8.8), boiler 0.664→0.125,
-  *and* the best on-topicality (overlap 0.109): Fairbanks → "The highest temperature in Fairbanks is
-  −10 °F". **Topic-drift (F) backfired**: its own overlap metric went *down* (0.071→0.056) and it
-  collapsed the model into single-token loops ("Army\\n\\nArmy\\n\\nArmy", "Falls\\n\\nFalls") — training
-  against a *random other continuation* taught "don't commit to specific content," satisfied by
-  degenerate filler. A clear negative result, honestly the most interesting one.
-- **The boilerplate attractor (the systemic finding).** `boiler` swings hardest of the three metrics,
-  and its direction is legible: behaviors whose reject is scrambled / looped / off-topic (A, D, F)
-  push the model *into* boilerplate (0.77–0.92) — emitting "References / Categories" is the safe
-  escape from "don't scramble / don't repeat / don't wander." Behaviors whose reject is incomplete,
-  metadata, or the model's own degenerate sample (B, C, E) push it *out* (0.00–0.17). Suppressing one
-  defect routinely inflames another; a single scalar objective cannot see the trade.
-- **Healthiest transfers: E (metadata) and C (on-policy)** — the only two that cut boilerplate *and*
-  raise on-topicality. Both point the same way: prefer real corpus prose over the model's own
-  scaffolding-laden output. Repetition survives both, so no single signal here fixes everything.
+  repetitive model (rep 0.244→0.130): Fairbanks base loops "the Fairbanks of the United States" → DPO
+  "There are two types of temperature in the southern United States. Their winter temperatures vary
+  greatly." Anti-**metadata** (E) is the standout — biggest margin (+8.8), meta 0.477→0.109, *and* the
+  best on-topicality (overlap 0.109): Fairbanks → "The highest temperature in Fairbanks is −10 °F".
+  **Topic-drift (F) missed its own target** — overlap went *down* (0.071→0.056), see the drift bullet.
+- **Repetition and metadata are competing degeneracy modes (the corrected systemic finding).** With
+  the two failure modes separated (`rep` vs `meta` — an earlier combined "boilerplate" metric that
+  also counted newline spam had wrongly shown D/F flooding into metadata; they do not), the pattern is
+  a *trade*: suppressing metadata inflates repetition and vice-versa. B/C/E cut meta hard (0.13/0.00/
+  0.11) but push rep up (0.25/0.37/0.30); A/D leave meta flat-to-up (0.56/0.44) while cutting rep
+  (0.17/0.13). The model has cheap fallback modes and squeezing one inflates the other — a single
+  scalar objective cannot see the trade. Only **E (metadata) and C (on-policy)** improve on-topicality
+  at all, and both point the same way: prefer real corpus prose over the model's own output.
 - **`chosen_drift` is the tell for healthy vs degenerate — F is not a trade-off, it is reward
-  hacking.** The margin sign hides *how* it was won; the drift decomposition (printed per behavior)
-  reveals it. Healthy transfers win by holding or lifting the real text and crushing only the reject:
-  C `chosen +5.8`, B `+0.5`, E `−4.2` against `rejected −91.7` (≈22:1). The collapses win by dragging
-  the real text down hard: D `chosen −24.7`, F `−11.8`, both only ≈2.7:1 vs their reject — most of
-  their "win" is collateral suppression of good text, which *is* the generative collapse. So D fits
-  the trade-off story (won its own metric, regressed boiler via the attractor), but **F does not**:
-  its "real ≻ random-other" preference has no clean feature except prompt-lexical-overlap, so DPO
-  hacked it by collapsing onto prompt-token echoes ("Army\\n\\nArmy") — failing even its own metric.
-  Large negative `chosen_drift` is the warning light.
+  hacking.** The margin sign hides *how* it was won; the drift decomposition reveals it. Healthy
+  transfers win by holding or lifting the real text and crushing only the reject: C `chosen +5.8`, B
+  `+0.5`, E `−4.2` against `rejected −91.7` (≈22:1). The collapses win by dragging the real text down
+  hard: D `−24.7`, F `−12.0`, both only ≈2.7:1 vs their reject — most of their "win" is collateral
+  suppression of good text, which *is* the generative collapse. D still won its own metric; **F did
+  not**: its "real ≻ random-other" preference has no clean feature except prompt-lexical-overlap, so
+  DPO hacked it by collapsing onto prompt-token echoes ("Army\\n\\nArmy\\n\\nArmy", "Falls\\n\\nFalls") —
+  failing even its own overlap target. Large negative `chosen_drift` is the warning light.
+
+**Caveats (what would harden this).** Single seed per behavior — the `ci95` bars are binomial over
+held-out pairs, *not* training-run variance, so the cross-behavior ranking is one trajectory each.
+The panel is greedy-only (the regime that most exaggerates repetition) and its `rep`/`meta`/`overlap`
+are means over 128 generations with no CI, so small overlap moves (C 0.096 vs E 0.109) are within
+noise. And every run took a fixed 300 steps — [T] shows how a validation-tracked rule would set that
+adaptively per behavior. Filed as curriculum items (multi-seed, a temperature panel, a null/placebo
+run).
 
 **Next notebook (the interpretability follow-up).** These are all *behavioral* readings — what the
 tuned model does. The natural next step is to open the hood: diff the DPO'd policies against the base
@@ -1034,6 +1185,11 @@ will explain mechanistically.
 "gold ≻ the model's own guess". These are fluency/faithfulness priors, not a learned *intent*. The
 next step is a properly learned reward model that extracts preference structure from data, then DPO
 (or PPO) against *that*. Other backlog: (a) regenerate on-policy rejects from the *current* policy
-each epoch (true online DPO, not one-shot from base); (b) per-behavior `beta` sweeps to find where
-suppression turns into degeneracy; (c) "mixed" distortion (shuffle+delete blend) was dropped as
-redundant with A/B — restore if a combined signal is wanted.
+each epoch (true online DPO, not one-shot from base); (b) regularized DPO (DPOP/IPO) with an NLL term
+on `chosen` to prevent the `chosen_drift` collapse seen in D/F; (c) a multi-objective run against
+several behaviors at once, to test whether the repetition↔metadata trade balances out.
+
+**References.** DPO (Rafailov et al. 2023); the `chosen_drift` collapse is DPO likelihood
+displacement (Razin et al. 2024; Pal et al. 2024, DPO-positive) and motivates IPO (Azar et al. 2023);
+repetition/degeneracy and the distinct-n metric (Welleck et al. 2019; Holtzman et al. 2019); F's
+reward hacking is reward overoptimization (Gao et al. 2023). Links in the README Resources.
