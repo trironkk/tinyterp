@@ -16,9 +16,10 @@
 #
 # **This notebook is a catalog.** One shared setup + machinery block, then the same three-cell
 # template repeated per behavior we want to suppress: **(1) construction** of `(prompt, chosen,
-# rejected)` pairs where `rejected` *is* the behavior; **(2) the RL loop** (DPO from a fresh policy);
-# **(3) metrics & samples** — held-out preference accuracy (base→DPO, with 95% CIs), the reward-margin
-# decomposition, a shared generation health panel, and base-vs-DPO greedy samples.
+# rejected)` pairs where `rejected` *is* the behavior; **(2) the RL loop** (DPO from a fresh policy,
+# with validation-tracked early stopping — see [T] — rather than a fixed step count); **(3) metrics &
+# samples** — held-out preference accuracy (base→DPO, with 95% CIs), the reward-margin decomposition, a
+# shared generation health panel, and base-vs-DPO greedy samples.
 #
 # Six behaviors, all built from the corpus + the model itself — no human labels, no LLM generation:
 #
@@ -113,8 +114,8 @@ def build_pool(n_examples: int, seed: int = 0) -> list[dict]:
     return pool
 
 
-N_POOL = 5000
-N_TRAIN = 4000
+N_POOL = 8000
+N_TRAIN = 6000
 pool = build_pool(N_POOL, seed=SEED)
 train_slice, held_slice = pool[:N_TRAIN], pool[N_TRAIN:]
 panel_prompts = held_slice[:128]  # fixed prompt set for the generation panel (behavior-independent)
@@ -128,17 +129,24 @@ print(f"{len(pool)=}  {len(train_slice)=}  {len(held_slice)=}  {len(panel_prompt
 # safe under causal attention). `dpo_batch` is the loss plus diagnostics (reward margin, and the
 # policy's log-prob *drift* from the reference on each side — the honest read on whether the margin
 # moves by lifting chosen or crushing rejected). `train_dpo` starts a fresh policy from the base
-# checkpoint every call, so behaviors are independent and comparable. `eval_dpo` / `train_dpo_traced`
-# are the validation-tracked variants used in the stopping-condition section [T] — same loop, but
-# probing a held-out split every few steps. The **generation panel** (`generation_report`, defined
-# here) batches greedy decoding (length-bucketed — this model has no attention-mask input, so padding
-# would corrupt positions) and scores the three health metrics (see the title cell) on the same 128
-# prompts.
+# checkpoint every call (so behaviors are independent and comparable) and trains it with
+# **validation-tracked early stopping**: it carves the last `N_VAL` pairs off the gradient as a
+# validation split, probes them every `EVAL_EVERY` steps with `eval_dpo`, and halts at the earlier of a
+# `chosen_drift` floor breach or a `val_loss` plateau (`stop_signal`), restoring the best *safe*
+# checkpoint (lowest val-loss among probes still within the drift floor). Section [T] is the diagnostic
+# that motivates this rule; here it is what every catalog run below uses instead of a fixed step count.
+# The **generation panel** (`generation_report`, defined here) batches greedy decoding (length-bucketed
+# — this model has no attention-mask input, so padding would corrupt positions) and scores the three
+# health metrics (see the title cell) on the same 128 prompts.
 # %% [S2] Machinery: masked_logp, dpo_batch, train_dpo, generation, panel, eval
 BETA = 0.1
 LR = 1e-5
-STEPS = 300
-BATCH = 16
+STEPS = 300  # step budget; validation-tracked early stopping usually halts sooner
+BATCH = 32
+N_VAL = 384  # carved off each behavior's train split to drive the stopping rule (never seen by grads)
+EVAL_EVERY = 20  # steps between validation probes
+DRIFT_FLOOR = -8.0  # chosen_drift health floor: stop before real-text logp falls this far below ref
+PATIENCE = 3  # val-loss early stop: consecutive non-improving probes tolerated
 N_GEN = 40
 TRIGGERS = ("References", "Other websites", "Related pages", "Living people", "births", "deaths")
 
@@ -182,23 +190,19 @@ def dpo_batch(policy, ref, batch: list[dict], beta: float = BETA) -> tuple[torch
     return loss, stats
 
 
-def train_dpo(train_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, seed=0):
-    """Fresh policy from the base checkpoint, DPO-trained against the frozen `ref`."""
-    torch.manual_seed(seed)
-    rng = random.Random(seed)
-    policy, _, _ = load_model(BASE_CKPT)
-    policy.to(device).train()
-    opt = torch.optim.AdamW(policy.parameters(), lr=lr)
-    for step in range(steps):
-        loss, stats = dpo_batch(policy, ref, rng.sample(train_pairs, batch), beta)
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-        if step % 50 == 0 or step == steps - 1:
-            print(f"  step {step:3d}  loss {stats['loss']:.4f}  margin {stats['margin']:+.3f}  "
-                  f"drift ch {stats['chosen_drift']:+.2f} rej {stats['rejected_drift']:+.2f}")
-    policy.eval()
-    return policy
+def stop_signal(history):
+    """Earliest step the two-signal stopping rule fires on, given the validation probes so far, or
+    None to keep training. (a) `chosen_drift` below `DRIFT_FLOOR` — the reward-hacking guard, a budget
+    on how far the real text's log-prob may fall below the reference; (b) `val_loss` not improving for
+    `PATIENCE` consecutive probes — ordinary overfitting of the preference to the train pairs."""
+    latest = history[-1]
+    if latest["val_chosen_drift"] < DRIFT_FLOOR:
+        return latest["step"], "drift-guard"
+    if len(history) > PATIENCE:
+        prior_best = min(e["val_loss"] for e in history[:-PATIENCE])
+        if all(e["val_loss"] >= prior_best - 1e-3 for e in history[-PATIENCE:]):
+            return latest["step"], "val-loss plateau"
+    return None
 
 
 @torch.no_grad()
@@ -221,17 +225,26 @@ def eval_dpo(policy, ref, pairs, beta=BETA, bs=64) -> dict:
             "chosen_drift": chosen_drift / tot, "rejected_drift": rejected_drift / tot}
 
 
-def train_dpo_traced(train_pairs, val_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, every=15, seed=0):
-    """`train_dpo` with a validation probe every `every` steps. Returns (policy, history) where
-    history[i] = {step, train_loss, val_*}. The trajectory is what a stopping rule watches."""
+def train_dpo(train_pairs, steps=STEPS, lr=LR, beta=BETA, batch=BATCH, early_stop=True,
+              n_val=N_VAL, every=EVAL_EVERY, seed=0):
+    """Fresh policy from the base checkpoint, DPO-trained against the frozen `ref` with
+    validation-tracked early stopping. The last `n_val` pairs are held out of the gradient as a
+    validation split, probed every `every` steps (`eval_dpo`); training halts at the earlier of a
+    `chosen_drift` floor breach or a `val_loss` plateau (`stop_signal`), and the best *safe*
+    checkpoint — lowest val-loss among probes still within the drift floor — is restored. Pass
+    `early_stop=False` to run the full `steps` budget instead (the [T] diagnostic). Returns
+    (policy, info) where info carries the probe history and the stop step/reason/kept step."""
     torch.manual_seed(seed)
     rng = random.Random(seed)
+    grad_pairs, val_pairs = train_pairs[:-n_val], train_pairs[-n_val:]
     policy, _, _ = load_model(BASE_CKPT)
     policy.to(device).train()
     opt = torch.optim.AdamW(policy.parameters(), lr=lr)
     history = []
+    best = {"val_loss": float("inf"), "step": 0, "state": None}
+    stop_step, reason = steps - 1, "budget"
     for step in range(steps):
-        loss, stats = dpo_batch(policy, ref, rng.sample(train_pairs, batch), beta)
+        loss, _ = dpo_batch(policy, ref, rng.sample(grad_pairs, batch), beta)
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -239,10 +252,22 @@ def train_dpo_traced(train_pairs, val_pairs, steps=STEPS, lr=LR, beta=BETA, batc
             policy.eval()
             val = eval_dpo(policy, ref, val_pairs, beta=beta)
             policy.train()
-            history.append({"step": step, "train_loss": stats["loss"],
+            history.append({"step": step, "train_loss": loss.item(),
                             **{f"val_{k}": v for k, v in val.items()}})
+            if val["chosen_drift"] >= DRIFT_FLOOR and val["loss"] < best["val_loss"] - 1e-3:
+                best = {"val_loss": val["loss"], "step": step,
+                        "state": {k: v.detach().cpu().clone() for k, v in policy.state_dict().items()}}
+            sig = stop_signal(history)
+            if step % 100 == 0 or (early_stop and sig):
+                print(f"  step {step:3d}  val_loss {val['loss']:.4f}  margin {val['margin']:+.3f}"
+                      f"  drift ch {val['chosen_drift']:+.2f}")
+            if early_stop and sig:
+                stop_step, reason = sig
+                break
+    if early_stop and best["state"] is not None:
+        policy.load_state_dict({k: v.to(device) for k, v in best["state"].items()})
     policy.eval()
-    return policy, history
+    return policy, {"history": history, "stop_step": stop_step, "reason": reason, "kept_step": best["step"]}
 
 
 @torch.no_grad()
@@ -344,21 +369,24 @@ def ci95(p, n):
 RESULTS: dict[str, dict] = {}
 
 
-def report_behavior(name, policy, held_pairs):
-    """Uniform metrics + samples block: pref-acc base→DPO (+CI), margin/drift, generation panel
-    base→DPO, and four base-vs-DPO greedy samples. Records into RESULTS for the closing summary."""
+def report_behavior(name, policy, held_pairs, info):
+    """Uniform metrics + samples block: where early stopping halted, pref-acc base→DPO (+CI),
+    margin/drift, generation panel base→DPO, and four base-vs-DPO greedy samples. Records into RESULTS
+    for the closing summary."""
     n = len(held_pairs)
     base_acc, dpo_acc = pref_accuracy(ref, held_pairs), pref_accuracy(policy, held_pairs)
     ms = margin_stats(policy, ref, held_pairs)
     panel = generation_report(policy, panel_prompts)
-    print(f"[{name}]  preference accuracy  base {base_acc:.3f} ± {ci95(base_acc, n):.3f}"
+    print(f"[{name}]  stopped @ {info['stop_step']}/{STEPS} ({info['reason']}), kept step {info['kept_step']}")
+    print(f"   preference accuracy  base {base_acc:.3f} ± {ci95(base_acc, n):.3f}"
           f"  ->  DPO {dpo_acc:.3f} ± {ci95(dpo_acc, n):.3f}   (n={n})")
     print(f"   reward margin {ms['margin']:+.2f}   drift  chosen {ms['chosen_drift']:+.2f}"
           f"   rejected {ms['rejected_drift']:+.2f}")
     print(f"   gen panel   rep {BASE_PANEL['rep']:.3f}->{panel['rep']:.3f}"
           f"   meta {BASE_PANEL['meta']:.3f}->{panel['meta']:.3f}"
           f"   overlap {BASE_PANEL['overlap']:.3f}->{panel['overlap']:.3f}")
-    RESULTS[name] = {"base_acc": base_acc, "dpo_acc": dpo_acc, **ms, "panel": panel}
+    RESULTS[name] = {"base_acc": base_acc, "dpo_acc": dpo_acc, **ms, "panel": panel,
+                     "stop_step": info["stop_step"], "reason": info["reason"]}
     for ex in held_pairs[:4]:
         pt = ex["prompt_text"]
         print("   PROMPT:", pt[:96])
@@ -402,10 +430,10 @@ for ex in shuffle_he[:2]:
     print("REJECT:", repr(ex["rejected_text"]), "\n")
 
 # %% [A2] RL loop
-policy_shuffle = train_dpo(shuffle_tr, seed=SEED)
+policy_shuffle, info_shuffle = train_dpo(shuffle_tr, seed=SEED)
 
 # %% [A3] Metrics & samples
-report_behavior("A: word-shuffle", policy_shuffle, shuffle_he)
+report_behavior("A: word-shuffle", policy_shuffle, shuffle_he, info_shuffle)
 
 # %% [markdown]
 # ## Behavior B — dropped words
@@ -430,10 +458,10 @@ for ex in delete_he[:2]:
     print("REJECT:", repr(ex["rejected_text"]), "\n")
 
 # %% [B2] RL loop
-policy_delete = train_dpo(delete_tr, seed=SEED)
+policy_delete, info_delete = train_dpo(delete_tr, seed=SEED)
 
 # %% [B3] Metrics & samples
-report_behavior("B: word-delete", policy_delete, delete_he)
+report_behavior("B: word-delete", policy_delete, delete_he, info_delete)
 
 # %% [markdown]
 # ## Behavior C — off-distribution self-samples (on-policy)
@@ -479,10 +507,10 @@ for ex in onpolicy_he[:2]:
     print("REJECT:", repr(ex["rejected_text"]), "\n")
 
 # %% [C2] RL loop
-policy_onpolicy = train_dpo(onpolicy_tr, seed=SEED)
+policy_onpolicy, info_onpolicy = train_dpo(onpolicy_tr, seed=SEED)
 
 # %% [C3] Metrics & samples
-report_behavior("C: on-policy", policy_onpolicy, onpolicy_he)
+report_behavior("C: on-policy", policy_onpolicy, onpolicy_he, info_onpolicy)
 
 # %% [markdown]
 # ## Behavior D — repetition loops
@@ -508,10 +536,10 @@ for ex in rep_he[:2]:
     print("REJECT:", repr(ex["rejected_text"]), "\n")
 
 # %% [D2] RL loop
-policy_rep = train_dpo(rep_tr, seed=SEED)
+policy_rep, info_rep = train_dpo(rep_tr, seed=SEED)
 
 # %% [D3] Metrics & samples
-report_behavior("D: repetition", policy_rep, rep_he)
+report_behavior("D: repetition", policy_rep, rep_he, info_rep)
 
 # %% [markdown]
 # ## Behavior E — metadata / boilerplate collapse
@@ -560,10 +588,10 @@ for ex in meta_he[:2]:
     print("REJECT:", repr(ex["rejected_text"]), "\n")
 
 # %% [E2] RL loop
-policy_meta = train_dpo(meta_tr, seed=SEED)
+policy_meta, info_meta = train_dpo(meta_tr, seed=SEED)
 
 # %% [E3] Metrics & samples
-report_behavior("E: metadata", policy_meta, meta_he)
+report_behavior("E: metadata", policy_meta, meta_he, info_meta)
 
 # %% [markdown]
 # ## Behavior F — topic drift
@@ -594,26 +622,28 @@ for ex in topic_he[:2]:
     print("REJECT:", repr(ex["rejected_text"]), "\n")
 
 # %% [F2] RL loop
-policy_topic = train_dpo(topic_tr, seed=SEED)
+policy_topic, info_topic = train_dpo(topic_tr, seed=SEED)
 
 # %% [F3] Metrics & samples
-report_behavior("F: topic-drift", policy_topic, topic_he)
+report_behavior("F: topic-drift", policy_topic, topic_he, info_topic)
 
 # %% [markdown]
-# **[G] Cross-behavior summary.** Preference-accuracy gains and the generation panel, side by side.
-# The story is two-dimensional: *headroom* (did the base already win the preference?) and *transfer*
-# (did suppressing the behavior move generation?). The two axes come apart — a behavior can be
-# already-separable yet still reshape generation, or move the score with little visible effect.
+# **[G] Cross-behavior summary.** Where each run stopped, its preference-accuracy gain, and the
+# generation panel. The story is two-dimensional: *headroom* (did the base already win the preference?)
+# and *transfer* (did suppressing the behavior move generation?). The two axes come apart — a behavior
+# can be already-separable yet still reshape generation, or move the score with little visible effect.
+# The `stop` column is the new third read: which runs the drift guard halted early vs which ran to a
+# val-loss plateau or the budget.
 # %% [G] Summary table + bar chart
 names = list(RESULTS.keys())
-print(f"{'behavior':16s} {'base_acc':>8s} {'dpo_acc':>8s} {'margin':>7s} {'ch_drift':>9s} "
-      f"{'rep':>14s} {'meta':>14s} {'overlap':>14s}")
+print(f"{'behavior':16s} {'stop':>5s} {'reason':>16s} {'base_acc':>8s} {'dpo_acc':>8s} {'margin':>7s} "
+      f"{'ch_drift':>9s} {'rep':>13s} {'meta':>13s} {'overlap':>13s}")
 for k in names:
     r = RESULTS[k]
-    print(f"{k:16s} {r['base_acc']:8.3f} {r['dpo_acc']:8.3f} {r['margin']:7.2f} "
-          f"{r['chosen_drift']:9.2f} "
-          f"{BASE_PANEL['rep']:.3f}->{r['panel']['rep']:.3f}  "
-          f"{BASE_PANEL['meta']:.3f}->{r['panel']['meta']:.3f}  "
+    print(f"{k:16s} {r['stop_step']:5d} {r['reason']:>16s} {r['base_acc']:8.3f} {r['dpo_acc']:8.3f} "
+          f"{r['margin']:7.2f} {r['chosen_drift']:9.2f} "
+          f"{BASE_PANEL['rep']:.3f}->{r['panel']['rep']:.3f} "
+          f"{BASE_PANEL['meta']:.3f}->{r['panel']['meta']:.3f} "
           f"{BASE_PANEL['overlap']:.3f}->{r['panel']['overlap']:.3f}")
 
 fig, ax = plt.subplots(1, 2, figsize=(15, 4))
@@ -633,65 +663,57 @@ ax[1].legend(fontsize=8)
 fig.tight_layout()
 
 # %% [markdown]
-# **[T] When to stop: validation-tracked training, not a fixed step count.** Every catalog run above
-# took a hard-coded `STEPS = 300`. The supervised analog to setting that adaptively is early stopping
-# on a validation split: watch a held-out metric, stop when it stops improving. DPO needs *two* watches,
-# because it has two distinct ways to go wrong:
+# **[T] Why the stop fires where it does — and what it buys.** Every catalog run above already used this
+# rule (`train_dpo`, [S2]): validation-tracked early stopping, halting at the earlier of a `val_loss`
+# plateau or a `chosen_drift` floor breach, keeping the best *safe* checkpoint. This section is the
+# diagnostic behind it. DPO has two distinct ways to go wrong, and each needs its own watch:
 #
-# 1. **Preference overfitting** — the reward separation starts memorizing the training pairs. Watch the
-#    **held-out DPO loss** (the direct analog to validation loss) and the **held-out accuracy / reward
-#    margin** it drives. A plateau (or an upturn in val loss) means further steps only sharpen the train
-#    set.
+# 1. **Preference overfitting** — the reward separation memorizes the train pairs. The **held-out DPO
+#    loss** (the direct analog to validation loss) and the accuracy / margin it drives plateau; further
+#    steps only sharpen the train set.
 # 2. **Reward hacking / likelihood displacement** — a failure val-loss *cannot* see, because the loss
-#    keeps dropping while the model rots. Watch the **held-out `chosen_drift`**: how far the real text's
-#    log-prob has fallen below the frozen reference. When it dives, DPO is winning the margin by crushing
-#    good text rather than ranking it higher (the [H] `chosen_drift` tell, now read as a trajectory).
+#    keeps dropping while the model rots. The **held-out `chosen_drift`** (how far the real text's
+#    log-prob has fallen below the reference) dives: DPO is winning the margin by crushing good text,
+#    not ranking it higher (the [H] tell, now as a trajectory).
 #
-# Recommended rule: stop at the *earlier* of (a) a val-loss plateau (patience) and (b) `chosen_drift`
-# breaching a floor — a budget on how much real-text probability we are willing to spend. Below,
-# `train_dpo_traced` probes a held-out split every 15 steps for a healthy run (E, metadata) and a
-# hacking run (F, topic-drift), and marks where each rule fires. (A fuller over-optimization budget
-# would add KL-to-reference / held-out perplexity on *neutral* prompts — filed in the backlog.)
-# %% [T] Trace a healthy (E) and a hacking (F) run; mark the stopping signals
-N_VAL = 256
-DRIFT_FLOOR = -8.0  # budget: how far chosen (real-text) logp may fall below the reference
-PATIENCE = 3  # val-loss early stop: consecutive non-improving probes tolerated
+# To watch both, the cell below re-runs E (healthy) and F (hacking) with `early_stop=False` — the full
+# budget, so we can see what happens *past* the stop — and marks where the rule fires. Then the payoff:
+# F held at its early stop (the `policy_topic` the catalog kept) vs F run out to the full budget. (A
+# fuller over-optimization budget would add KL-to-reference / held-out perplexity on *neutral* prompts —
+# filed in the backlog.)
+# %% [T] Full-length traces motivate the rule; the payoff is F stopped vs F run out
+full = {}
+f_full = None
+for tag, tr in [("E metadata (healthy)", meta_tr), ("F topic-drift (hacking)", topic_tr)]:
+    print(f"full-length trace: {tag} ...", flush=True)
+    pol, info = train_dpo(tr, early_stop=False, seed=SEED)
+    full[tag] = info["history"]
+    if tag.startswith("F"):
+        f_full = pol
 
 
-def recommend_stop(hist):
-    """Earlier of a val-loss plateau (patience) and a chosen_drift floor breach."""
-    best, best_i, bad, loss_stop = hist[0]["val_loss"], 0, 0, hist[-1]["step"]
-    for i in range(1, len(hist)):
-        if hist[i]["val_loss"] < best - 1e-3:
-            best, best_i, bad = hist[i]["val_loss"], i, 0
-        else:
-            bad += 1
-            if bad >= PATIENCE:
-                loss_stop = hist[i]["step"]
-                break
-    guard = next((h["step"] for h in hist if h["val_chosen_drift"] < DRIFT_FLOOR), None)
-    stop = min(s for s in (loss_stop, guard) if s is not None)
-    return {"loss_stop": loss_stop, "guard": guard, "stop": stop}
+def first_stop(history):
+    """Where the rule first fires along a full-length trace (for the plot marker)."""
+    for i in range(len(history)):
+        sig = stop_signal(history[: i + 1])
+        if sig:
+            return sig
+    return history[-1]["step"], "budget"
 
-
-traces = {}
-for tag, tr, he in [("E metadata (healthy)", meta_tr, meta_he), ("F topic-drift (hacking)", topic_tr, topic_he)]:
-    print(f"tracing {tag} ...", flush=True)
-    _, traces[tag] = train_dpo_traced(tr, he[:N_VAL], seed=SEED)
 
 fig, ax = plt.subplots(1, 3, figsize=(16, 4))
-for tag, c in zip(traces, ("C0", "C3")):
-    h = traces[tag]
+for tag, c in zip(full, ("C0", "C3")):
+    h = full[tag]
     xs = [e["step"] for e in h]
-    rec = recommend_stop(h)
+    stop, reason = first_stop(h)
     ax[0].plot(xs, [e["train_loss"] for e in h], "--", c=c, alpha=0.4)
     ax[0].plot(xs, [e["val_loss"] for e in h], "-", c=c, label=tag)
     ax[1].plot(xs, [e["val_margin"] for e in h], "-", c=c, label=tag)
     ax[2].plot(xs, [e["val_chosen_drift"] for e in h], "-", c=c, label=f"{tag} chosen")
     ax[2].plot(xs, [e["val_rejected_drift"] for e in h], ":", c=c, alpha=0.5)
     for a in ax:
-        a.axvline(rec["stop"], ls="-", c=c, alpha=0.3)
-    print(f"{tag:26s} val_loss-stop {rec['loss_stop']:>3}  drift-guard {str(rec['guard']):>4}  ->  stop @ {rec['stop']}")
+        a.axvline(stop, ls="-", c=c, alpha=0.3)
+    print(f"{tag:26s} rule fires @ {stop} ({reason})")
 ax[0].set(title="loss (dashed=train, solid=val)", xlabel="step")
 ax[1].set(title="val reward margin", xlabel="step")
 ax[2].axhline(DRIFT_FLOOR, ls="--", c="gray", alpha=0.7, label=f"drift floor {DRIFT_FLOOR:.0f}")
@@ -700,80 +722,91 @@ for a in ax:
     a.legend(fontsize=7)
 fig.tight_layout()
 
+# The payoff: F kept at its early stop (policy_topic) vs F run out to the full budget (f_full).
+stop_drift = margin_stats(policy_topic, ref, topic_he)["chosen_drift"]
+full_drift = margin_stats(f_full, ref, topic_he)["chosen_drift"]
+stop_panel, full_panel = generation_report(policy_topic, panel_prompts), generation_report(f_full, panel_prompts)
+print(f"\nF payoff  (early-stop @ {info_topic['stop_step']}  vs  full {STEPS} steps):")
+print(f"   chosen_drift  {stop_drift:+.2f}  vs  {full_drift:+.2f}")
+print(f"   gen overlap   {stop_panel['overlap']:.3f}  vs  {full_panel['overlap']:.3f}")
+print(f"   gen rep       {stop_panel['rep']:.3f}  vs  {full_panel['rep']:.3f}")
+
 # %% [markdown]
-# **[T] Reading the trajectories.** Both runs *look* identical on the classic signal — val loss falls
-# monotonically all the way to step 299 for E and F alike, so a val-loss / fixed-step rule would run
-# both to the full 300. What separates them is `chosen_drift`:
+# **[T] Reading the trajectories — and the payoff.** Run to the full budget, E and F look similar on
+# the classic signal: val loss falls and val margin climbs for both. `chosen_drift` is what separates
+# them, and now the rule *acts* on it:
 #
-# - **E (metadata, healthy):** `chosen_drift` never breaches the floor and val margin climbs cleanly.
-#   No signal forces an early stop, so E honestly spends its whole budget (stop @ 299).
-# - **F (topic-drift, hacking):** val loss keeps dropping just as steadily, but `chosen_drift` dives
-#   straight through the floor at **step 195**. The margin is being bought by crushing the real text
-#   (the reward hacking from [H]), and the drift guard halts the run 105 steps early — damage a
-#   val-loss-only rule would have run straight past.
+# - **E (metadata, healthy):** `chosen_drift` stays inside the floor the whole way; no guard fires, so
+#   E runs to the budget (the catalog kept its best-val-loss checkpoint, step 260).
+# - **F (topic-drift, hacking):** val loss keeps dropping — a val-loss-only or fixed-step rule would
+#   ride F all the way out — but `chosen_drift` dives through the floor at **step 120**. Past that point
+#   the margin is bought by crushing the real text (the reward hacking from [H]).
 #
-# So in *these* runs val loss is inert as a stopping signal (it never turns), and the `chosen_drift`
-# guard does all the work — the concrete case for watching both. Val loss measures whether the
-# preference *generalizes*; `chosen_drift` measures whether it is being learned *honestly*. Keep both
-# and stop at the earlier: on a longer schedule the val-loss plateau becomes the binding one, while the
-# drift guard is what catches a hacking run that val loss alone would happily ride to the end. (These
-# are single-seed traces on one 256-pair val split — `DRIFT_FLOOR` and `PATIENCE` want a multi-seed
-# sweep before they are load-bearing.)
+# The payoff line under the plot is the whole point: F held at its early stop (step 120) vs F run out to
+# 300 is strictly healthier on every axis — `chosen_drift` −6.4 vs −15.2, generation overlap 0.089 vs
+# 0.076, repeated-3-grams 0.241 vs 0.284. Stopping doesn't just save compute; it keeps a better model.
+# Val loss measures whether the preference *generalizes*; `chosen_drift` measures whether it is being
+# learned *honestly* — and here the drift guard is the one doing the work (it fired for A, D, and F;
+# B/C/E ran to the val-loss/budget stop). (Single seed, one 384-pair val split — `DRIFT_FLOOR` and
+# `PATIENCE` want a multi-seed sweep before they are load-bearing; the −8.0 floor also caught A, already
+# at ceiling, so it is a touch aggressive.)
 
 # %% [markdown]
 # **[H] Findings & backlog.**
 #
-# Base generation panel (128 held-out prompts): **rep 0.244, meta 0.477, overlap 0.071**. The base
-# repeats (a quarter of its 3-grams) and emits Wikipedia metadata ("References / Categories") on
-# roughly half of prompts. Held-out preference accuracy (base → DPO, n=1000) and the panel shift
-# (bold = the metric each behavior targets):
+# Base generation panel (128 held-out prompts): **rep 0.222, meta 0.469, overlap 0.088**. The base
+# repeats (a fifth of its 3-grams) and dumps Wikipedia metadata ("References / 1987 births") on ~half of
+# prompts. Every run below used validation-tracked early stopping ([T]); `stop` is where it halted, of a
+# 300-step budget. Held-out preference accuracy (base → DPO, n=2000) and the panel shift (bold = the
+# metric each behavior targets):
 #
-# | behavior | base→DPO acc | margin | ch_drift | rep | meta | overlap |
-# |---|---|---|---|---|---|---|
-# | A word-shuffle | 0.996 → 1.000 | +5.2 | −7.1 | 0.244→0.174 | 0.477→0.555 | 0.071→0.048 |
-# | B word-delete  | 0.451 → 0.649 | +1.6 | +0.5 | 0.244→0.254 | 0.477→0.133 | 0.071→0.069 |
-# | C on-policy    | 0.444 → 0.597 | +1.3 | +5.8 | 0.244→0.365 | 0.477→**0.000** | 0.071→**0.096** |
-# | D repetition   | 0.643 → 0.930 | +4.3 | −24.7 | 0.244→**0.130** | 0.477→0.438 | 0.071→0.025 |
-# | E metadata     | 0.451 → 0.919 | +8.8 | −4.2 | 0.244→0.295 | 0.477→**0.109** | 0.071→**0.109** |
-# | F topic-drift  | 0.602 → 0.743 | +2.2 | −12.0 | 0.244→0.298 | 0.477→0.461 | 0.071→**0.056** |
+# | behavior | stop | base→DPO acc | margin | ch_drift | rep | meta | overlap |
+# |---|---|---|---|---|---|---|---|
+# | A word-shuffle | 280 guard | 0.996 → 1.000 | +5.6 | −7.5 | 0.222→0.162 | 0.469→0.688 | 0.088→0.065 |
+# | B word-delete  | 299 budget | 0.452 → 0.710 | +2.0 | −1.1 | 0.222→0.219 | 0.469→0.102 | 0.088→0.062 |
+# | C on-policy    | 299 budget | 0.431 → 0.688 | +2.1 | +4.2 | 0.222→0.280 | 0.469→**0.000** | 0.088→0.081 |
+# | D repetition   | 80 guard  | 0.625 → 0.858 | +2.1 | −6.9 | 0.222→**0.140** | 0.469→0.414 | 0.088→0.064 |
+# | E metadata     | 299 budget | 0.451 → 0.932 | +8.9 | −3.6 | 0.222→0.314 | 0.469→**0.086** | 0.088→**0.137** |
+# | F topic-drift  | 120 guard  | 0.591 → 0.696 | +1.5 | −6.4 | 0.222→0.241 | 0.469→0.398 | 0.088→0.089 |
 #
-# - **Headroom is uncorrelated with success.** *No headroom*: word-shuffle (base 0.996 — length-matched
-#   and already solved, DPO can only sharpen). *Negative headroom*: word-delete and metadata sit at
-#   ~0.45 because the base *prefers* the reject (delete for the length reason in [B1]; metadata because
-#   the model likes "References / 1987 births" tokens). *Real headroom*: on-policy (0.444, the model
-#   ranks its own samples highly). DPO moves all of them — but the accuracy number says nothing about
-#   whether generation improved (below).
-# - **Targeted metrics move — two of three suggestions land.** Anti-**repetition** (D) gives the least
-#   repetitive model (rep 0.244→0.130): Fairbanks base loops "the Fairbanks of the United States" → DPO
-#   "There are two types of temperature in the southern United States. Their winter temperatures vary
-#   greatly." Anti-**metadata** (E) is the standout — biggest margin (+8.8), meta 0.477→0.109, *and* the
-#   best on-topicality (overlap 0.109): Fairbanks → "The highest temperature in Fairbanks is −10 °F".
-#   **Topic-drift (F) missed its own target** — overlap went *down* (0.071→0.056), see the drift bullet.
-# - **Repetition and metadata are competing degeneracy modes (the corrected systemic finding).** With
-#   the two failure modes separated (`rep` vs `meta` — an earlier combined "boilerplate" metric that
-#   also counted newline spam had wrongly shown D/F flooding into metadata; they do not), the pattern is
-#   a *trade*: suppressing metadata inflates repetition and vice-versa. B/C/E cut meta hard (0.13/0.00/
-#   0.11) but push rep up (0.25/0.37/0.30); A/D leave meta flat-to-up (0.56/0.44) while cutting rep
-#   (0.17/0.13). The model has cheap fallback modes and squeezing one inflates the other — a single
-#   scalar objective cannot see the trade. Only **E (metadata) and C (on-policy)** improve on-topicality
+# - **Early stopping governs — and it prevents the collapse.** The drift guard fired for A, D, and F;
+#   B/C/E ran to the val-loss/budget stop. It earns its keep on the hackers: an earlier fixed-300 run let
+#   D and F drive `chosen_drift` to −24.7 and −12.0, but halted at steps 80 and 120 they are kept at
+#   −6.9 and −6.4. The [T] payoff makes it concrete — F held at 120 beats F run out to 300 on *every*
+#   axis (drift −6.4 vs −15.2, overlap 0.089 vs 0.076, rep 0.241 vs 0.284). Stopping keeps a better
+#   model, not just cheaper compute. (The −8 floor also caught A, already at ceiling — a touch aggressive.)
+# - **Headroom is uncorrelated with success.** *No headroom*: word-shuffle (base 0.996, already solved —
+#   DPO can only sharpen). *Negative headroom*: word-delete and metadata sit at ~0.45 because the base
+#   *prefers* the reject (delete for the length reason in [B1]; metadata because the model likes
+#   "References / 1987 births" tokens). *Real headroom*: on-policy (0.431). DPO moves all of them — but
+#   the accuracy number says nothing about whether generation improved.
+# - **Targeted metrics move — two of three land.** Anti-**repetition** (D) gives the least repetitive
+#   model (rep 0.222→0.140): the base loops "It is a sauropod. It is a sauropod. It is a sauropod." → DPO
+#   breaks the loop. Anti-**metadata** (E) is the standout — biggest margin (+8.9), meta 0.469→0.086,
+#   *and* the best on-topicality (overlap 0.088→0.137): same sauropod prompt → "It is found in the
+#   southern part of the state of Somalia…" (prose, no loop, no metadata). **Topic-drift (F) still misses
+#   its own target** — overlap is flat (0.088→0.089).
+# - **Repetition and metadata are competing degeneracy modes.** With the two failure modes kept separate
+#   (`rep` vs `meta`), the pattern is a *trade*: cut one and the other inflates. B/C/E cut meta hard
+#   (0.10/0.00/0.09) but push rep up (0.22/0.28/0.31); A/D cut rep (0.16/0.14) while meta climbs
+#   (0.69/0.41) — D breaks its "sauropod" loop only to flood metadata ("Dinosaurs of Africa / Volcanoes
+#   of North America", "1671 births / 1737 deaths"). The model has cheap fallback modes and squeezing one
+#   inflates the other; a single scalar objective cannot see the trade. Only **E and C** improve overlap
 #   at all, and both point the same way: prefer real corpus prose over the model's own output.
-# - **`chosen_drift` is the tell for healthy vs degenerate — F is not a trade-off, it is reward
-#   hacking.** The margin sign hides *how* it was won; the drift decomposition reveals it. Healthy
-#   transfers win by holding or lifting the real text and crushing only the reject: C `chosen +5.8`, B
-#   `+0.5`, E `−4.2` against `rejected −91.7` (≈22:1). The collapses win by dragging the real text down
-#   hard: D `−24.7`, F `−12.0`, both only ≈2.7:1 vs their reject — most of their "win" is collateral
-#   suppression of good text, which *is* the generative collapse. D still won its own metric; **F did
-#   not**: its "real ≻ random-other" preference has no clean feature except prompt-lexical-overlap, so
-#   DPO hacked it by collapsing onto prompt-token echoes ("Army\n\nArmy\n\nArmy", "Falls\n\nFalls") —
-#   failing even its own overlap target. Large negative `chosen_drift` is the warning light.
+# - **`chosen_drift` is the tell — now acted on, not just observed.** The margin sign hides *how* it was
+#   won; the drift decomposition reveals it. Healthy transfers hold the real text and crush only the
+#   reject: E `chosen −3.6` against `rejected −92.4` (≈26:1), C `+4.2`, B `−1.1`. The collapses win by
+#   dragging the real text down — F left to run reaches `chosen −15.2`, its "real ≻ random-other"
+#   preference having no clean feature except prompt-lexical-overlap. Under the old fixed budget that
+#   drift was a warning light you could only read afterward; the guard turns it into a stop, which is
+#   what keeps D/F out of the deep collapse this time.
 #
-# **Caveats (what would harden this).** Single seed per behavior — the `ci95` bars are binomial over
-# held-out pairs, *not* training-run variance, so the cross-behavior ranking is one trajectory each.
+# **Caveats (what would harden this).** Single seed per behavior — the `ci95` bars are binomial over the
+# 2000 held-out pairs, *not* training-run variance, so the cross-behavior ranking is one trajectory each.
 # The panel is greedy-only (the regime that most exaggerates repetition) and its `rep`/`meta`/`overlap`
-# are means over 128 generations with no CI, so small overlap moves (C 0.096 vs E 0.109) are within
-# noise. And every run took a fixed 300 steps — [T] shows how a validation-tracked rule would set that
-# adaptively per behavior. Filed as curriculum items (multi-seed, a temperature panel, a null/placebo
-# run).
+# are means over 128 generations with no CI. The stopping thresholds (`DRIFT_FLOOR = −8`, `PATIENCE = 3`)
+# are hand-set on one seed — the −8 floor catching A (already solved) shows they want a sweep. Filed as
+# curriculum items (multi-seed, a temperature panel, a null/placebo run).
 #
 # **Next notebook (the interpretability follow-up).** These are all *behavioral* readings — what the
 # tuned model does. The natural next step is to open the hood: diff the DPO'd policies against the base
@@ -787,8 +820,9 @@ fig.tight_layout()
 # next step is a properly learned reward model that extracts preference structure from data, then DPO
 # (or PPO) against *that*. Other backlog: (a) regenerate on-policy rejects from the *current* policy
 # each epoch (true online DPO, not one-shot from base); (b) regularized DPO (DPOP/IPO) with an NLL term
-# on `chosen` to prevent the `chosen_drift` collapse seen in D/F; (c) a multi-objective run against
-# several behaviors at once, to test whether the repetition↔metadata trade balances out.
+# on `chosen` — the complement to the drift guard here: instead of *stopping* before the `chosen_drift`
+# collapse, it lets a run reach the budget without collapsing; (c) a multi-objective run against several
+# behaviors at once, to test whether the repetition↔metadata trade balances out.
 #
 # **References.** DPO (Rafailov et al. 2023); the `chosen_drift` collapse is DPO likelihood
 # displacement (Razin et al. 2024; Pal et al. 2024, DPO-positive) and motivates IPO (Azar et al. 2023);
