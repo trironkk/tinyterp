@@ -1,4 +1,4 @@
-# RL'ing behaviors out of a base model with DPO: a uniform catalog
+# Reinforcement-learning (RL) behaviors out of a base model with Direct Preference Optimization (DPO): a uniform catalog
 
 **Objective.** Post-training, the *preference optimization* curriculum item. Fine-tune the base
 transformer directly against synthetic preference pairs with the DPO loss — no separate reward
@@ -16,10 +16,10 @@ where `logp` sums the log-probability of the *continuation* tokens under each mo
 **This notebook is a catalog.** One shared setup + machinery block, then the same three-cell
 template repeated per behavior we want to suppress: **(1) construction** of `(prompt, chosen, rejected)` pairs where `rejected` *is* the behavior; **(2) the RL loop** (DPO from a fresh policy,
 with validation-tracked early stopping — see [T] — rather than a fixed step count); **(3) metrics &
-samples** — held-out preference accuracy (base→DPO, with 95% CIs), the reward-margin decomposition, a
+samples** — held-out preference accuracy (base→DPO, with 95% confidence intervals (CIs)), the reward-margin decomposition, a
 shared generation health panel, and base-vs-DPO greedy samples.
 
-Six behaviors, all built from the corpus + the model itself — no human labels, no LLM generation:
+Six behaviors, all built from the corpus + the model itself — no human labels, no large language model (LLM) generation:
 
 | #   | behavior (the `rejected` side)  | construction                                 |
 | --- | ------------------------------- | -------------------------------------------- |
@@ -997,7 +997,7 @@ diagnostic behind it. DPO has two distinct ways to go wrong, and each needs its 
 To watch both, the cell below re-runs E (healthy) and F (hacking) with `early_stop=False` — the full
 budget, so we can see what happens *past* the stop — and marks where the rule fires. Then the payoff:
 F held at its early stop (the `policy_topic` the catalog kept) vs F run out to the full budget. (A
-fuller over-optimization budget would add KL-to-reference / held-out perplexity on *neutral* prompts —
+fuller over-optimization budget would add Kullback–Leibler (KL)-to-reference / held-out perplexity on *neutral* prompts —
 filed in the backlog.)
 
 ```python
@@ -1166,7 +1166,7 @@ curriculum items (multi-seed, a temperature panel, a null/placebo run).
 
 **Next notebook (the interpretability follow-up).** These are all *behavioral* readings — what the
 tuned model does. The natural next step is to open the hood: diff the DPO'd policies against the base
-*in weight space* and localize what tuning changed (which layers / heads / MLP directions moved, how
+*in weight space* and localize what tuning changed (which layers / heads / multi-layer perceptron (MLP) directions moved, how
 `chosen_drift` maps onto parameter deltas, whether the healthy signals E/C touch different weights
 than the degenerate F/D). This notebook produces the policies and the behavioral labels that follow-up
 will explain mechanistically.
@@ -1174,8 +1174,8 @@ will explain mechanistically.
 **Deferred (real future work).** Every `rejected` here is still synthetic — string surgery or
 "gold ≻ the model's own guess". These are fluency/faithfulness priors, not a learned *intent*. The
 next step is a properly learned reward model that extracts preference structure from data, then DPO
-(or PPO) against *that*. Other backlog: (a) regenerate on-policy rejects from the *current* policy
-each epoch (true online DPO, not one-shot from base); (b) regularized DPO (DPOP/IPO) with an NLL term
+(or Proximal Policy Optimization (PPO)) against *that*. Other backlog: (a) regenerate on-policy rejects from the *current* policy
+each epoch (true online DPO, not one-shot from base); (b) regularized DPO variants — Direct Preference Optimization-Positive (DPOP) and Identity Preference Optimization (IPO) — with a negative log-likelihood (NLL) term
 on `chosen` — the complement to the drift guard here: instead of *stopping* before the `chosen_drift`
 collapse, it lets a run reach the budget without collapsing; (c) a multi-objective run against several
 behaviors at once, to test whether the repetition↔metadata trade balances out.
