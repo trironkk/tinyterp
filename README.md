@@ -124,7 +124,8 @@ make check
 - [x] Preference optimization
   - [2026-07-13_preference_optimization_dpo.py](notebooks/2026-07-13_preference_optimization_dpo.py)
 - [ ] Regularized DPO (DPOP / IPO) against chosen-likelihood displacement
-- [ ] Multi-objective preference optimization (train against several behaviors at once)
+- [ ] Combine the per-behavior tuned models into one (weight merging -- model soup / task arithmetic /
+  TIES -- and/or joint multi-objective DPO; cache tuned weights to `artifacts/`)
 - [ ] Post-training regression control (held-out perplexity / KL-to-reference on neutral prompts)
 
 ### Interpretability
@@ -151,8 +152,9 @@ make check
   - [ ] Circuit tracing
 - [ ] Superposition toy model
 - [ ] Sparse Autoencoders
-- [ ] Weight-space diff of fine-tuning: localize what DPO changed (which layers / heads / MLP
-  directions moved; does the `chosen_drift` health signal map onto parameter deltas?)
+- [ ] Weight-space diff of fine-tuning: contrast the base against the single combined RL model and
+  localize what tuning changed (which layers / heads / MLP directions moved; does the `chosen_drift`
+  health signal map onto parameter deltas?)
   - [ ] Training
   - [ ] Feature interpretation
 
