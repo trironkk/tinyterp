@@ -121,7 +121,12 @@ make check
 ### Post-training
 
 - [ ] Reward model
-- [ ] Preference optimization
+- [x] Preference optimization
+  - [2026-07-13_preference_optimization_dpo.py](notebooks/2026-07-13_preference_optimization_dpo.py)
+- [ ] Regularized DPO (DPOP / IPO) against chosen-likelihood displacement
+- [ ] Combine the per-behavior tuned models into one (weight merging -- model soup / task arithmetic /
+  TIES -- and/or joint multi-objective DPO; cache tuned weights to `artifacts/`)
+- [ ] Post-training regression control (held-out perplexity / KL-to-reference on neutral prompts)
 
 ### Interpretability
 
@@ -147,6 +152,9 @@ make check
   - [ ] Circuit tracing
 - [ ] Superposition toy model
 - [ ] Sparse Autoencoders
+- [ ] Weight-space diff of fine-tuning: contrast the base against the single combined RL model and
+  localize what tuning changed (which layers / heads / MLP directions moved; does the `chosen_drift`
+  health signal map onto parameter deltas?)
   - [ ] Training
   - [ ] Feature interpretation
 
@@ -161,3 +169,11 @@ make check
 - [Olsson et al., "In-context Learning and Induction Heads"](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)
 - [Elhage et al., "A Mathematical Framework for Transformer Circuits"](https://transformer-circuits.pub/2021/framework/index.html)
 - [Michel et al., "Are Sixteen Heads Really Better than One?"](https://arxiv.org/abs/1905.10650)
+- [Rafailov et al., "Direct Preference Optimization: Your Language Model is Secretly a Reward Model"](https://arxiv.org/abs/2305.18290)
+- [Razin et al., "Unintentional Unalignment: Likelihood Displacement in DPO"](https://arxiv.org/abs/2410.08847)
+- [Pal et al., "Smaug: Fixing Failure Modes of Preference Optimisation with DPO-Positive"](https://arxiv.org/abs/2402.13228)
+- [Azar et al., "A General Theoretical Paradigm to Understand Learning from Human Preferences" (IPO)](https://arxiv.org/abs/2310.12036)
+- [Welleck et al., "Neural Text Generation with Unlikelihood Training"](https://arxiv.org/abs/1908.04319)
+- [Holtzman et al., "The Curious Case of Neural Text Degeneration"](https://arxiv.org/abs/1904.09751)
+- [Gao et al., "Scaling Laws for Reward Model Overoptimization"](https://arxiv.org/abs/2210.10760)
+- [Ouyang et al., "Training language models to follow instructions with human feedback" (InstructGPT)](https://arxiv.org/abs/2203.02155)
